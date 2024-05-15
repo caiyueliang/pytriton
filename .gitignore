@@ -330,3 +330,5 @@ docs/examples.md
 ### VisualStudioCode+all ##
 .vscode
 .devcontainer
+
+examples/*/*/*/*.jpeg

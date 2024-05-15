@@ -107,38 +107,30 @@ def main():
 
     start_t = time.time()
     with ModelClient(args.url, "StableDiffusion_1_5", init_timeout_s=args.init_timeout_s) as client:
-
-        # with ThreadPool(args.num_thread) as pool:
-        #     text_embedding_list = list(
-        #         tqdm(
-        #             pool.imap(
-        #                 infer,
-        #                 batched_text,
-        #             ),
-        #             total=len(args.iterations)
-        #         )
-        #     )
-        # text_embedding_list = list(itertools.chain.from_iterable(text_embedding_list))
+        with ThreadPool(args.num_thread) as pool:
+            infer_success_list = list(
+                tqdm(
+                    pool.imap(
+                        lambda idx: infer(
+                            client=client, 
+                            req_idx=idx, 
+                            prompts=prompts, 
+                            img_size=img_size, 
+                            results_path=results_path
+                        ),
+                        range(args.iterations)
+                    ),
+                    total=args.iterations
+                )
+            )
+        logger.info(f"[main] {infer_success_list}")
     
-        for req_idx in range(1, args.iterations + 1):
-            infer(client=client, 
-                  req_idx=req_idx,
-                  prompts=prompts, 
-                  img_size=img_size,
-                  results_path=results_path)
-            # result_dict = client.infer_batch(prompt=prompt, img_size=img_size)
-            # logger.debug(f"Result for for request ({req_idx}).")
-
-            # for idx, image in enumerate(result_dict["image"]):
-            #     # file_idx = req_idx + idx
-            #     file_path = results_path / "image_{}_{}.jpeg".format(req_idx, prompts[prompt_id])
-            #     file_path.parent.mkdir(parents=True, exist_ok=True)
-            #     msg = base64.b64decode(image[0])
-            #     buffer = io.BytesIO(msg)
-            #     image = Image.open(buffer)
-            #     with file_path.open("wb") as fp:
-            #         image.save(fp)
-            #     logger.info(f"Image saved to {file_path}")
+        # for req_idx in range(1, args.iterations + 1):
+        #     infer(client=client, 
+        #           req_idx=req_idx,
+        #           prompts=prompts, 
+        #           img_size=img_size,
+        #           results_path=results_path)
 
     end_t = time.time()
     logger.warning(f"[time_used] {round(end_t-start_t, 5)} s")
