@@ -70,16 +70,46 @@ def _infer_fn(**inputs: np.ndarray):
         last_hidden_states.append(results.last_hidden_state.cpu().detach().numpy())
     
         logger.info(f"[_infer_fn] last_hidden_states: {last_hidden_states}")
-    # last_hidden_states = last_hidden_states.detach().numpy()
+
     last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
     return [last_hidden_states]
 
+@batch
+def _infer_fn_embedding(**inputs: np.ndarray):
+    logger.info(f"[_infer_fn_embedding] inputs: {inputs.values()}")
+    (sequence_batch,) = inputs.values()
+    logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
+    # need to convert dtype=object to bytes first
+    # end decode unicode bytes
+    sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
+
+    last_hidden_states = []
+    for sequence_item in sequence_batch:
+        # tokenized_sequence = tokenizer(sequence_item.item(), return_tensors="jax")
+        # results = model(**tokenized_sequence)
+        logger.info(f"[_infer_fn_embedding] sequence_item: {sequence_item.item()}")
+        inputs = tokenizer(
+                        sequence_item.item(), 
+                        padding=True,
+                        truncation=True,
+                        max_length=1024,
+                        return_tensors="pt"
+                    )
+        inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
+        results = model(**inputs_on_device, return_dict=True)
+        
+        last_hidden_states.append(results.last_hidden_state.cpu().detach().numpy())
+    
+        logger.info(f"[_infer_fn_embedding] last_hidden_states: {last_hidden_states}")
+
+    last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
+    return [last_hidden_states]
 
 with Triton() as triton:
     logger.info("Loading BERT model.")
     triton.bind(
         model_name="BERT",
-        infer_func=_infer_fn,
+        infer_func=_infer_fn_embedding,
         inputs=[
             Tensor(name="sequence", dtype=np.bytes_, shape=(-1,)),
         ],

@@ -14,20 +14,19 @@
 # limitations under the License.
 """Client for BERT classifier sample server."""
 
-import logging
+from loguru import logger
 
 import numpy as np
 
 from pytriton.client import ModelClient
 
-logger = logging.getLogger("examples.huggingface_bert_jax.client")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s: %(message)s")
-
 init_timeout_s = 600  # increase default timeout to let model download from HF hub
 sequence = np.array([b"Hello, my dog is cute"])
+# sequence = np.array(["你好，介绍一下你自己"])
 
 logger.info(f"Input: {sequence}")
 logger.info("Sending request")
+
 with ModelClient("localhost", "BERT", init_timeout_s=init_timeout_s) as client:
     result_dict = client.infer_sample(sequence)
 
