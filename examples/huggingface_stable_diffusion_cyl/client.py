@@ -17,16 +17,37 @@
 import argparse
 import base64
 import io
-import logging
+from loguru import logger
 import pathlib
-
+import time
 import numpy as np
 from PIL import Image  # pytype: disable=import-error
+from multiprocessing.pool import ThreadPool
+from tqdm import tqdm
 
 from pytriton.client import ModelClient
 
-logger = logging.getLogger("examples.huggingface_stable_diffusion.client")
+def infer(client, req_idx, prompts, img_size, results_path):
+    prompt_id = req_idx % len(prompts)
+    prompt = prompts[prompt_id]
+    prompt_np = np.array([[prompt]])
+    prompt_np = np.char.encode(prompt_np, "utf-8")
+    logger.info(f"[infer] Prompt: ({req_idx}): {prompt}, {prompt_np}")
+    logger.info(f"[infer] Image size: ({req_idx}): {img_size}")
+    
+    result_dict = client.infer_batch(prompt=prompt_np, img_size=img_size)
 
+    for idx, image in enumerate(result_dict["image"]):
+        # file_idx = req_idx + idx
+        file_path = results_path / "image_{}_{}.jpeg".format(req_idx, prompt)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        msg = base64.b64decode(image[0])
+        buffer = io.BytesIO(msg)
+        image = Image.open(buffer)
+        with file_path.open("wb") as fp:
+            image.save(fp)
+        logger.info(f"Image saved to {file_path}")
+    return True
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -65,10 +86,14 @@ def main():
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--num_thread",
+        type=int,
+        default=1,
+        help="Number of requests per client.",
+        required=False,
+    )
     args = parser.parse_args()
-
-    log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(level=log_level, format="%(asctime)s - %(levelname)s - %(name)s: %(message)s")
 
     prompts = [
         "一个漂亮的女孩在看书",
@@ -80,28 +105,43 @@ def main():
     results_path = pathlib.Path(args.results_path)
     results_path.mkdir(parents=True, exist_ok=True)
 
+    start_t = time.time()
     with ModelClient(args.url, "StableDiffusion_1_5", init_timeout_s=args.init_timeout_s) as client:
-        for req_idx in range(1, args.iterations + 1):
-            logger.debug(f"Sending request ({req_idx}).")
-            prompt_id = req_idx % len(prompts)
-            prompt = prompts[prompt_id]
-            prompt = np.array([[prompt]])
-            prompt = np.char.encode(prompt, "utf-8")
-            logger.info(f"Prompt ({req_idx}): {prompt}")
-            logger.info(f"Image size ({req_idx}): {img_size}")
-            result_dict = client.infer_batch(prompt=prompt, img_size=img_size)
-            logger.debug(f"Result for for request ({req_idx}).")
 
-            for idx, image in enumerate(result_dict["image"]):
-                # file_idx = req_idx + idx
-                file_path = results_path / "image_{}_{}.jpeg".format(req_idx, prompts[prompt_id])
-                file_path.parent.mkdir(parents=True, exist_ok=True)
-                msg = base64.b64decode(image[0])
-                buffer = io.BytesIO(msg)
-                image = Image.open(buffer)
-                with file_path.open("wb") as fp:
-                    image.save(fp)
-                logger.info(f"Image saved to {file_path}")
+        # with ThreadPool(args.num_thread) as pool:
+        #     text_embedding_list = list(
+        #         tqdm(
+        #             pool.imap(
+        #                 infer,
+        #                 batched_text,
+        #             ),
+        #             total=len(args.iterations)
+        #         )
+        #     )
+        # text_embedding_list = list(itertools.chain.from_iterable(text_embedding_list))
+    
+        for req_idx in range(1, args.iterations + 1):
+            infer(client=client, 
+                  req_idx=req_idx,
+                  prompts=prompts, 
+                  img_size=img_size,
+                  results_path=results_path)
+            # result_dict = client.infer_batch(prompt=prompt, img_size=img_size)
+            # logger.debug(f"Result for for request ({req_idx}).")
+
+            # for idx, image in enumerate(result_dict["image"]):
+            #     # file_idx = req_idx + idx
+            #     file_path = results_path / "image_{}_{}.jpeg".format(req_idx, prompts[prompt_id])
+            #     file_path.parent.mkdir(parents=True, exist_ok=True)
+            #     msg = base64.b64decode(image[0])
+            #     buffer = io.BytesIO(msg)
+            #     image = Image.open(buffer)
+            #     with file_path.open("wb") as fp:
+            #         image.save(fp)
+            #     logger.info(f"Image saved to {file_path}")
+
+    end_t = time.time()
+    logger.warning(f"[time_used] {round(end_t-start_t, 5)} s")
 
 
 if __name__ == "__main__":
