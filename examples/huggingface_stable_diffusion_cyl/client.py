@@ -23,31 +23,34 @@ import time
 import numpy as np
 from PIL import Image  # pytype: disable=import-error
 from multiprocessing.pool import ThreadPool
+from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED, as_completed
 from tqdm import tqdm
 
 from pytriton.client import ModelClient
 
-def infer(client, req_idx, prompts, img_size, results_path):
-    prompt_id = req_idx % len(prompts)
-    prompt = prompts[prompt_id]
-    prompt_np = np.array([[prompt]])
-    prompt_np = np.char.encode(prompt_np, "utf-8")
-    logger.info(f"[infer] Prompt: ({req_idx}): {prompt}, {prompt_np}")
-    logger.info(f"[infer] Image size: ({req_idx}): {img_size}")
-    
-    result_dict = client.infer_batch(prompt=prompt_np, img_size=img_size)
+def infer(url, init_timeout_s, req_idx, prompts, img_size, results_path):
+    with ModelClient(url, "StableDiffusion_1_5", init_timeout_s=init_timeout_s) as client:
+        prompt_id = req_idx % len(prompts)
+        prompt = prompts[prompt_id]
+        prompt_np = np.array([[prompt]])
+        prompt_np = np.char.encode(prompt_np, "utf-8")
+        logger.info(f"[infer] Prompt: ({req_idx}): {prompt}, {prompt_np}")
+        logger.info(f"[infer] Image size: ({req_idx}): {img_size}")
+        
+        result_dict = client.infer_batch(prompt=prompt_np, img_size=img_size)
 
-    for idx, image in enumerate(result_dict["image"]):
-        # file_idx = req_idx + idx
-        file_path = results_path / "image_{}_{}.jpeg".format(req_idx, prompt)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        msg = base64.b64decode(image[0])
-        buffer = io.BytesIO(msg)
-        image = Image.open(buffer)
-        with file_path.open("wb") as fp:
-            image.save(fp)
-        logger.info(f"Image saved to {file_path}")
+        for idx, image in enumerate(result_dict["image"]):
+            # file_idx = req_idx + idx
+            file_path = results_path / "image_{}_{}.jpeg".format(req_idx, prompt)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            msg = base64.b64decode(image[0])
+            buffer = io.BytesIO(msg)
+            image = Image.open(buffer)
+            with file_path.open("wb") as fp:
+                image.save(fp)
+            logger.info(f"Image saved to {file_path}")
     return True
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -106,13 +109,14 @@ def main():
     results_path.mkdir(parents=True, exist_ok=True)
 
     start_t = time.time()
-    with ModelClient(args.url, "StableDiffusion_1_5", init_timeout_s=args.init_timeout_s) as client:
-        with ThreadPool(args.num_thread) as pool:
-            infer_success_list = list(
+
+    with ThreadPool(args.num_thread) as pool:
+        infer_success_list = list(
                 tqdm(
                     pool.imap(
                         lambda idx: infer(
-                            client=client, 
+                            url=args.url, 
+                            init_timeout_s=args.init_timeout_s,
                             req_idx=idx, 
                             prompts=prompts, 
                             img_size=img_size, 
@@ -126,7 +130,8 @@ def main():
         logger.info(f"[main] {infer_success_list}")
     
         # for req_idx in range(1, args.iterations + 1):
-        #     infer(client=client, 
+        #     infer(url=args.url,
+        #           init_timeout_s=args.init_timeout_s,
         #           req_idx=req_idx,
         #           prompts=prompts, 
         #           img_size=img_size,
