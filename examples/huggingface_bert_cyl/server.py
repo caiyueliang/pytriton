@@ -74,41 +74,6 @@ model.eval()
 #     last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
 #     return [last_hidden_states]
 
-@batch
-def _infer_fn_embedding(**inputs: np.ndarray):
-    # logger.info(f"[_infer_fn_embedding] inputs: {inputs}")
-    (sequence_batch,) = inputs.values()
-    logger.info(f"[_infer_fn_embedding] sequence_batch: {len(sequence_batch)}")
-    # need to convert dtype=object to bytes first
-    # end decode unicode bytes
-    sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
-    # logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
-
-    last_hidden_states = []
-    for sequence_item in sequence_batch:
-        # tokenized_sequence = tokenizer(sequence_item.item(), return_tensors="jax")
-        # results = model(**tokenized_sequence)
-        # logger.info(f"[_infer_fn_embedding] sequence_item: {sequence_item.item()}")
-        inputs = tokenizer(
-                        sequence_item.item(), 
-                        padding=True,
-                        truncation=True,
-                        max_length=512,
-                        return_tensors="pt"
-                    )
-        inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-        results = model(**inputs_on_device, return_dict=True)
-        
-        last_hidden_states.append(results.last_hidden_state.cpu().detach().numpy())
-    
-        # logger.info(f"[_infer_fn_embedding] last_hidden_states: {last_hidden_states}")
-
-    last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
-    logger.info(f"[_infer_fn_embedding] last_hidden_states: {last_hidden_states.size()}")
-    l = [last_hidden_states]
-    logger.info(f"[_infer_fn_embedding] l: {l}")
-    return l
-
 # @batch
 # def _infer_fn_embedding(**inputs: np.ndarray):
 #     # logger.info(f"[_infer_fn_embedding] inputs: {inputs}")
@@ -117,30 +82,60 @@ def _infer_fn_embedding(**inputs: np.ndarray):
 #     # need to convert dtype=object to bytes first
 #     # end decode unicode bytes
 #     sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
-#     sequence_batch = [s[0] for s in sequence_batch]
-#     logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
+#     # logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
 
 #     last_hidden_states = []
-#     # for sequence_item in sequence_batch:
+#     for sequence_item in sequence_batch:
 #         # tokenized_sequence = tokenizer(sequence_item.item(), return_tensors="jax")
 #         # results = model(**tokenized_sequence)
 #         # logger.info(f"[_infer_fn_embedding] sequence_item: {sequence_item.item()}")
-#     inputs = tokenizer(
-#                         sequence_batch, 
+#         inputs = tokenizer(
+#                         sequence_item.item(), 
 #                         padding=True,
 #                         truncation=True,
 #                         max_length=512,
 #                         return_tensors="pt"
 #                     )
-#     inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-#     results = model(**inputs_on_device, return_dict=True)
-#     logger.info(f"[_infer_fn_embedding] results: {results}")
-
-#     last_hidden_states.append(results.last_hidden_state.cpu().detach().numpy())
-#     # logger.info(f"[_infer_fn_embedding] last_hidden_states: {last_hidden_states}")
+#         inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
+#         results = model(**inputs_on_device, return_dict=True)
+        
+#         last_hidden_states.append(results.last_hidden_state.cpu().detach().numpy())
+    
+#         # logger.info(f"[_infer_fn_embedding] last_hidden_states: {last_hidden_states}")
 
 #     last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
-#     return [last_hidden_states]
+#     logger.info(f"[_infer_fn_embedding] last_hidden_states: {last_hidden_states.shape}")
+#     l = [last_hidden_states]
+#     logger.info(f"[_infer_fn_embedding] len: {len(l)}; {l}")
+#     return l
+
+@batch
+def _infer_fn_embedding(**inputs: np.ndarray):
+    # logger.info(f"[_infer_fn_embedding] inputs: {inputs}")
+    (sequence_batch,) = inputs.values()
+    logger.info(f"[_infer_fn_embedding] sequence_batch: {len(sequence_batch)}")
+    # need to convert dtype=object to bytes first
+    # end decode unicode bytes
+    sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
+    sequence_batch = [s[0] for s in sequence_batch]
+    logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
+
+    inputs = tokenizer(
+        sequence_batch, 
+        padding=True,
+        truncation=True,
+        max_length=512,
+        return_tensors="pt"
+    )
+    inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
+    results = model(**inputs_on_device, return_dict=True)
+    # logger.info(f"[_infer_fn_embedding] results: {results}")
+
+    last_hidden_states = results.last_hidden_state.unsqueeze(1).cpu().detach().numpy()
+    last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
+    logger.info(f"[_infer_fn_embedding] last_hidden_states shape: {last_hidden_states.shape}")
+    return [last_hidden_states]
+
 
 with Triton() as triton:
     logger.info("Loading BERT model.")

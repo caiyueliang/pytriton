@@ -31,7 +31,7 @@ def infer(url, init_timeout_s, times, sequence):
 
             for output_name, output_data in result_dict.items():
                 output_data = np.array2string(output_data, max_line_width=np.inf, separator=",").replace("\n", "")
-                # logger.info(f"{output_name}: {len(output_data)}")
+                # logger.info(f"{output_name}: len: {len(output_data)}; {output_data}")
     return True
 
 def start_process(num_processes, url, init_timeout_s, times, sequence):
