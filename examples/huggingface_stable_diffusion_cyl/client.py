@@ -23,7 +23,6 @@ import time
 import numpy as np
 from PIL import Image  # pytype: disable=import-error
 from multiprocessing.pool import ThreadPool
-from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED, as_completed
 from tqdm import tqdm
 
 from pytriton.client import ModelClient

@@ -14,23 +14,100 @@
 # limitations under the License.
 """Client for BERT classifier sample server."""
 
+import argparse
 from loguru import logger
-
+import time
+from multiprocessing import Process
+# from multiprocessing.pool import ThreadPool
+from tqdm import tqdm
 import numpy as np
 
 from pytriton.client import ModelClient
 
-init_timeout_s = 600  # increase default timeout to let model download from HF hub
-sequence = np.array([b"Hello, my dog is cute"])
-# sequence = np.array(["你好，介绍一下你自己"])
+def infer(url, init_timeout_s, times, sequence):
+    with ModelClient(url, "BERT", init_timeout_s=init_timeout_s) as client:
+        for i in range(times):
+            result_dict = client.infer_sample(sequence)
 
-logger.info(f"Input: {sequence}")
-logger.info("Sending request")
+            for output_name, output_data in result_dict.items():
+                output_data = np.array2string(output_data, max_line_width=np.inf, separator=",").replace("\n", "")
+                # logger.info(f"{output_name}: {len(output_data)}")
+    return True
 
-with ModelClient("localhost", "BERT", init_timeout_s=init_timeout_s) as client:
-    result_dict = client.infer_sample(sequence)
+def start_process(num_processes, url, init_timeout_s, times, sequence):
+    # 创建并启动多个进程
+    processes = []
+    for i in range(num_processes):
+        # 可以为每个进程定制不同的参数
+        # custom_params = {**base_params, f"param_{i}": f"value_{i}"}
+        p = Process(target=infer, args=(url, init_timeout_s, times, sequence))
+        processes.append(p)
+        p.start()
 
+    # 等待所有进程完成
+    for p in processes:
+        p.join()
 
-for output_name, output_data in result_dict.items():
-    output_data = np.array2string(output_data, max_line_width=np.inf, separator=",").replace("\n", "")
-    logger.info(f"{output_name}: {output_data}")
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--url",
+        default="localhost",
+        help=(
+            "Url to Triton server (ex. grpc://localhost:8001)."
+            "HTTP protocol with default port is used if parameter is not provided"
+        ),
+        required=False,
+    )
+    parser.add_argument(
+        "--init-timeout-s",
+        type=float,
+        default=600.0,
+        help="Server and model ready state timeout in seconds",
+        required=False,
+    )
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=1,
+        help="Number of requests per client.",
+        required=False,
+    )
+    parser.add_argument(
+        "--results-path",
+        type=str,
+        default="results",
+        help="Path to folder where images should be stored.",
+        required=False,
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--num_thread",
+        type=int,
+        default=1,
+        help="Number of requests per client.",
+        required=False,
+    )
+    args = parser.parse_args()
+
+    # init_timeout_s = 600  # increase default timeout to let model download from HF hub
+    sequence = np.array([b"Hello, my dog is cute"])
+    # sequence = np.array(["你好，介绍一下你自己"])
+
+    logger.info(f"Input: {sequence}")
+    logger.info("Sending request")
+
+    start_t = time.time()
+
+    start_process(num_processes=args.num_thread, url=args.url, init_timeout_s=args.init_timeout_s, times=args.iterations, sequence=sequence)
+    # infer(args.url, args.init_timeout_s, sequence)
+
+    end_t = time.time()
+    logger.warning(f"[time_used] {round(end_t-start_t, 5)} s")
+
+if __name__ == "__main__":
+    main()
