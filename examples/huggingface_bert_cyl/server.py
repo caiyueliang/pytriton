@@ -15,64 +15,23 @@
 """Simple classifier example based on Hugging Face JAX BERT model."""
 
 from loguru import logger
+from typing import Any, List
 
 import os
+import argparse
 import numpy as np
 import torch
-# from transformers import BertTokenizer, FlaxBertModel  # pytype: disable=import-error
 from transformers import AutoModel, AutoTokenizer
 
 from pytriton.decorators import batch
 from pytriton.model_config import DynamicBatcher, ModelConfig, Tensor
-from pytriton.triton import Triton
+from pytriton.triton import Triton, TritonConfig
 
-# tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-# model = FlaxBertModel.from_pretrained("bert-base-uncased")
 
 model_folder_embedding = os.environ["MODEL_PATH_EMBEDDING"]
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 torch_dtype = torch.float16
-
-# 实例化embedding类
-logger.info("init model on: {}".format(str(device)))
-logger.info("embedding model folder: {}".format(model_folder_embedding))
-
-tokenizer = AutoTokenizer.from_pretrained(model_folder_embedding)
-model = AutoModel.from_pretrained(model_folder_embedding, torch_dtype=torch_dtype)
-model.to(device)
-model.eval()
-
-
-# @batch
-# def _infer_fn(**inputs: np.ndarray):
-#     (sequence_batch,) = inputs.values()
-
-#     # need to convert dtype=object to bytes first
-#     # end decode unicode bytes
-#     sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
-
-#     last_hidden_states = []
-#     for sequence_item in sequence_batch:
-#         # tokenized_sequence = tokenizer(sequence_item.item(), return_tensors="jax")
-#         # results = model(**tokenized_sequence)
-#         logger.info(f"[_infer_fn] sequence_item: {sequence_item.item()}")
-#         inputs = tokenizer(
-#                         sequence_item.item(), 
-#                         padding=True,
-#                         truncation=True,
-#                         max_length=512,
-#                         return_tensors="pt"
-#                     )
-#         inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-#         results = model(**inputs_on_device, return_dict=True)
-        
-#         last_hidden_states.append(results.last_hidden_state.cpu().detach().numpy())
-    
-#         # logger.info(f"[_infer_fn] last_hidden_states: {last_hidden_states}")
-
-#     last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
-#     return [last_hidden_states]
 
 # @batch
 # def _infer_fn_embedding(**inputs: np.ndarray):
@@ -109,55 +68,121 @@ model.eval()
 #     logger.info(f"[_infer_fn_embedding] len: {len(l)}; {l}")
 #     return l
 
-@batch
-def _infer_fn_embedding(**inputs: np.ndarray):
-    # logger.info(f"[_infer_fn_embedding] inputs: {inputs}")
-    (sequence_batch,) = inputs.values()
-    logger.info(f"[_infer_fn_embedding] sequence_batch: {len(sequence_batch)}")
-    # need to convert dtype=object to bytes first
-    # end decode unicode bytes
-    sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
-    sequence_batch = [s[0] for s in sequence_batch]
-    logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
+# @batch
+# def _infer_fn_embedding(**inputs: np.ndarray):
+#     # logger.info(f"[_infer_fn_embedding] inputs: {inputs}")
+#     (sequence_batch,) = inputs.values()
+#     logger.info(f"[_infer_fn_embedding] sequence_batch: {len(sequence_batch)}")
+#     # need to convert dtype=object to bytes first
+#     # end decode unicode bytes
+#     sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
+#     sequence_batch = [s[0] for s in sequence_batch]
+#     logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
 
-    inputs = tokenizer(
-        sequence_batch, 
-        padding=True,
-        truncation=True,
-        max_length=512,
-        return_tensors="pt"
-    )
-    inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-    results = model(**inputs_on_device, return_dict=True)
-    # logger.info(f"[_infer_fn_embedding] results: {results}")
+#     inputs = tokenizer(
+#         sequence_batch, 
+#         padding=True,
+#         truncation=True,
+#         max_length=512,
+#         return_tensors="pt"
+#     )
+#     inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
+#     results = model(**inputs_on_device, return_dict=True)
+#     # logger.info(f"[_infer_fn_embedding] results: {results}")
 
-    last_hidden_states = results.last_hidden_state.unsqueeze(1).cpu().detach().numpy()
-    last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
-    logger.info(f"[_infer_fn_embedding] last_hidden_states shape: {last_hidden_states.shape}")
-    return [last_hidden_states]
+#     last_hidden_states = results.last_hidden_state.unsqueeze(1).cpu().detach().numpy()
+#     last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
+#     logger.info(f"[_infer_fn_embedding] last_hidden_states shape: {last_hidden_states.shape}")
+#     return [last_hidden_states]
 
 
-with Triton() as triton:
-    logger.info("Loading BERT model.")
-    triton.bind(
-        model_name="BERT",
-        infer_func=_infer_fn_embedding,
-        inputs=[
-            Tensor(name="sequence", dtype=np.bytes_, shape=(-1,)),
-        ],
-        outputs=[
-            Tensor(
-                name="last_hidden_state",
-                dtype=np.float32,
-                shape=(-1, -1, -1),
-            ),
-        ],
-        config=ModelConfig(
-            max_batch_size=128,
-            batcher=DynamicBatcher(
-                    max_queue_delay_microseconds=10*1000,
-                ),),
-        strict=True,
-    )
-    logger.info("Serving inference")
-    triton.serve()
+class _InferFuncWrapper:
+    def __init__(self, model: Any, tokenizer: Any, device: str):
+        self._model = model
+        self._device = device
+        self._tokenizer = tokenizer
+
+    @batch
+    def __call__(self, **inputs: np.ndarray):
+        # logger.info(f"[_infer_fn_embedding] inputs: {inputs}")
+        (sequence_batch,) = inputs.values()
+        logger.info(f"[_infer_fn_embedding] sequence_batch: {len(sequence_batch)}")
+        # need to convert dtype=object to bytes first
+        # end decode unicode bytes
+        sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
+        sequence_batch = [s[0] for s in sequence_batch]
+        logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
+
+        inputs = self._tokenizer(
+            sequence_batch, 
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt"
+        )
+        inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
+        results = self._model(**inputs_on_device, return_dict=True)
+        # logger.info(f"[_infer_fn_embedding] results: {results}")
+
+        last_hidden_states = results.last_hidden_state.unsqueeze(1).cpu().detach().numpy()
+        last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
+        logger.info(f"[_infer_fn_embedding] last_hidden_states shape: {last_hidden_states.shape}")
+        return [last_hidden_states]
+
+    
+def _infer_function_factory(devices: List[str]):
+    infer_funcs = []
+    for device in devices:
+        # 实例化embedding类
+        logger.info("init model on: {}".format(str(device)))
+        logger.info("embedding model folder: {}".format(model_folder_embedding))
+        tokenizer = AutoTokenizer.from_pretrained(model_folder_embedding)
+        model = AutoModel.from_pretrained(model_folder_embedding, torch_dtype=torch_dtype)
+        model.to(device)
+        model.eval()
+        infer_funcs.append(_InferFuncWrapper(model=model, tokenizer=tokenizer, device=device))
+
+    return infer_funcs
+
+def parse_argvs():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--max_batch_size", type=int, default=128, help="Batch size of request.", required=False)
+    parser.add_argument("--max_queue_delay_microseconds", type=int, default=10000, help="Max queue delay microseconds.", required=False)
+    parser.add_argument("--instances_number", type=int, default=1, help="Number of model instances.", required=False)
+    parser.add_argument("--verbose", action="store_true", default=False)
+    args = parser.parse_args()
+    logger.info('[parse_argvs] {}'.format(args))
+    return args
+
+if __name__ == "__main__":
+    args = parse_argvs()
+
+    log_verbose = 1 if args.verbose else 0
+    config = TritonConfig(exit_on_error=True, log_verbose=log_verbose)
+
+    devices = [device] * args.instances_number
+
+    with Triton(config=config) as triton:
+        logger.info(f"Loading BERT model on devices: {devices}")
+        triton.bind(
+            model_name="BERT",
+            infer_func=_infer_function_factory(devices),
+            inputs=[
+                Tensor(name="sequence", dtype=np.bytes_, shape=(-1,)),
+            ],
+            outputs=[
+                Tensor(
+                    name="last_hidden_state",
+                    dtype=np.float32,
+                    shape=(-1, -1, -1),
+                ),
+            ],
+            config=ModelConfig(
+                max_batch_size=args.max_batch_size,
+                batcher=DynamicBatcher(
+                        max_queue_delay_microseconds=args.max_queue_delay_microseconds,
+                    ),),
+            strict=True,
+        )
+        logger.info("Serving inference")
+        triton.serve()
