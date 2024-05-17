@@ -17,36 +17,54 @@
 import argparse
 from loguru import logger
 import time
-from multiprocessing import Process
+from multiprocessing import Process, Queue, JoinableQueue
 # from multiprocessing.pool import ThreadPool
 from tqdm import tqdm
 import numpy as np
 
 from pytriton.client import ModelClient
 
-def infer(url, init_timeout_s, times, sequence):
+def infer(url, init_timeout_s, times, sequence, result_queue):
+    times_list = []
     with ModelClient(url, "BERT", init_timeout_s=init_timeout_s) as client:
         for i in range(times):
+            start = time.time() * 1000
             result_dict = client.infer_sample(sequence)
 
             for output_name, output_data in result_dict.items():
                 output_data = np.array2string(output_data, max_line_width=np.inf, separator=",").replace("\n", "")
                 # logger.info(f"{output_name}: len: {len(output_data)}; {output_data}")
-    return True
+            end = time.time() * 1000
+            times_list.append(end-start)
+    
+    result_queue.put(times_list)
+    # return True
 
 def start_process(num_processes, url, init_timeout_s, times, sequence):
+    # 创建一个 Queue 用于接收进程的返回数据
+    # result_queue = Queue()
+    result_queue = JoinableQueue()
     # 创建并启动多个进程
     processes = []
     for i in range(num_processes):
         # 可以为每个进程定制不同的参数
         # custom_params = {**base_params, f"param_{i}": f"value_{i}"}
-        p = Process(target=infer, args=(url, init_timeout_s, times, sequence))
+        p = Process(target=infer, args=(url, init_timeout_s, times, sequence, result_queue))
         processes.append(p)
         p.start()
 
     # 等待所有进程完成
     for p in processes:
         p.join()
+
+    logger.info(f"11111")
+    # 收集所有进程的返回数据
+    results = []
+    while not result_queue.empty():
+        results += result_queue.get()
+
+    logger.warning(f"[results] 请求数据量: {len(results)}, 平均请求耗时: {round(sum(results)/len(results), 2)} ms")
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
