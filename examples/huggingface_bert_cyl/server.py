@@ -103,17 +103,21 @@ class _InferFuncWrapper:
         self._tokenizer = tokenizer
 
     @batch
-    @group_by_values("max_length")
-    @first_value("max_length")
-    def __call__(self, sequence: np.ndarray, max_length: np.int32):
-        logger.info(f"[_infer_fn_embedding] sequence: {sequence}")
-        logger.info(f"[_infer_fn_embedding] max_length: {max_length}")
-        # (sequence_batch, max_length) = inputs.values()
+    @group_by_values("max_length", "pooler")
+    @first_value("max_length", "pooler")
+    def __call__(self, sequence: np.ndarray, max_length: np.int32, pooler: np.bytes_):
         sequence_batch = sequence
-        logger.info(f"[_infer_fn_embedding] sequence_batch: {len(sequence_batch)}")
+        logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
+        logger.info(f"[_infer_fn_embedding] max_length: {max_length}")
+        pooler = pooler.decode("utf-8")
+        logger.info(f"[_infer_fn_embedding] pooler: {pooler}")
+        
         # need to convert dtype=object to bytes first
         # end decode unicode bytes
         sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
+        # logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
+        # import itertools
+        # sequence_batch = list(itertools.chain(*sequence_batch))
         sequence_batch = [s[0] for s in sequence_batch]
         logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
 
@@ -121,7 +125,7 @@ class _InferFuncWrapper:
             sequence_batch, 
             padding=True,
             truncation=True,
-            max_length=512,
+            max_length=max_length,
             return_tensors="pt"
         )
         inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
@@ -135,11 +139,12 @@ class _InferFuncWrapper:
     
     # @batch
     # def __call__(self, **inputs: np.ndarray):
-    #     # logger.info(f"[_infer_fn_embedding] inputs: {inputs}")
-    #     (sequence_batch, max_length) = inputs.values()
+    #     logger.info(f"[_infer_fn_embedding] inputs: {inputs}")
+    #     (sequence_batch, max_length, pooler) = inputs.values()
     #     logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
     #     logger.info(f"[_infer_fn_embedding] sequence_batch: {len(sequence_batch)}")
     #     logger.info(f"[_infer_fn_embedding] max_length: {max_length}")
+    #     logger.info(f"[_infer_fn_embedding] pooler: {pooler}")
     #     # need to convert dtype=object to bytes first
     #     # end decode unicode bytes
     #     sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
@@ -203,6 +208,7 @@ if __name__ == "__main__":
             inputs=[
                 Tensor(name="sequence", dtype=np.bytes_, shape=(-1,)),
                 Tensor(name="max_length", dtype=np.int32, shape=(1,)),
+                Tensor(name="pooler", dtype=np.bytes_, shape=(1,)),
             ],
             outputs=[
                 Tensor(

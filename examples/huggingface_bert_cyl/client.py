@@ -24,12 +24,12 @@ import numpy as np
 
 from pytriton.client import ModelClient
 
-def infer(url, init_timeout_s, times, sequence, max_length, result_queue):
+def infer(url, init_timeout_s, times, sequence, max_length, pooler, result_queue):
     times_list = []
     with ModelClient(url, "BERT", init_timeout_s=init_timeout_s) as client:
         for i in range(times):
             start = time.time() * 1000
-            result_dict = client.infer_sample(sequence, max_length)
+            result_dict = client.infer_sample(sequence, max_length, pooler)
 
             for output_name, output_data in result_dict.items():
                 output_data = np.array2string(output_data, max_line_width=np.inf, separator=",").replace("\n", "")
@@ -40,7 +40,7 @@ def infer(url, init_timeout_s, times, sequence, max_length, result_queue):
     result_queue.put(times_list)
     # return True
 
-def start_process(num_processes, url, init_timeout_s, times, sequence, max_length):
+def start_process(num_processes, url, init_timeout_s, times, sequence, max_length, pooler):
     # 创建一个 Queue 用于接收进程的返回数据
     # result_queue = Queue()
     result_queue = JoinableQueue()
@@ -49,7 +49,7 @@ def start_process(num_processes, url, init_timeout_s, times, sequence, max_lengt
     for i in range(num_processes):
         # 可以为每个进程定制不同的参数
         # custom_params = {**base_params, f"param_{i}": f"value_{i}"}
-        p = Process(target=infer, args=(url, init_timeout_s, times, sequence, max_length, result_queue))
+        p = Process(target=infer, args=(url, init_timeout_s, times, sequence, max_length, pooler, result_queue))
         processes.append(p)
         p.start()
 
@@ -68,53 +68,23 @@ def start_process(num_processes, url, init_timeout_s, times, sequence, max_lengt
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--url",
-        default="localhost",
-        help=(
+    parser.add_argument("--url", default="localhost", help=(
             "Url to Triton server (ex. grpc://localhost:8001)."
             "HTTP protocol with default port is used if parameter is not provided"
-        ),
-        required=False,
-    )
-    parser.add_argument(
-        "--init-timeout-s",
-        type=float,
-        default=600.0,
-        help="Server and model ready state timeout in seconds",
-        required=False,
-    )
-    parser.add_argument(
-        "--iterations",
-        type=int,
-        default=1,
-        help="Number of requests per client.",
-        required=False,
-    )
-    parser.add_argument(
-        "--results-path",
-        type=str,
-        default="results",
-        help="Path to folder where images should be stored.",
-        required=False,
-    )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        default=False,
-    )
-    parser.add_argument(
-        "--num_thread",
-        type=int,
-        default=1,
-        help="Number of requests per client.",
-        required=False,
-    )
+        ), required=False)
+    parser.add_argument("--init-timeout-s", type=float, default=600.0, help="Server and model ready state timeout in seconds", required=False)
+    parser.add_argument("--iterations", type=int, default=1, help="Number of requests per client.", required=False)
+    parser.add_argument("--text", type=str, default="我是中国人", required=False)
+    parser.add_argument("--verbose", action="store_true", default=False)
+    parser.add_argument("--num_thread", type=int, default=1, help="Number of requests per client.", required=False)
     args = parser.parse_args()
 
     # init_timeout_s = 600  # increase default timeout to let model download from HF hub
-    sequence = np.array([b"Hello, my dog is cute"])
+    # sequence = np.array([b"Hello, my dog is cute"])
+    # sequence = np.array([u"我是中国人".encode('utf-8')])
+    sequence = np.array([args.text.encode('utf-8')])
     max_length = np.array([512], dtype=np.int32)
+    pooler = np.array([b"cls"])
     # sequence = np.array(["你好，介绍一下你自己"])
 
     logger.info(f"Input: {sequence}")
@@ -122,7 +92,8 @@ def main():
 
     start_t = time.time()
 
-    start_process(num_processes=args.num_thread, url=args.url, init_timeout_s=args.init_timeout_s, times=args.iterations, sequence=sequence, max_length=max_length)
+    start_process(num_processes=args.num_thread, url=args.url, init_timeout_s=args.init_timeout_s, times=args.iterations, 
+                  sequence=sequence, max_length=max_length, pooler=pooler)
     # infer(args.url, args.init_timeout_s, sequence)
 
     end_t = time.time()
