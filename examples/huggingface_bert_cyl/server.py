@@ -107,10 +107,9 @@ class _InferFuncWrapper:
     @first_value("max_length", "pooler")
     def __call__(self, sequence: np.ndarray, max_length: np.int32, pooler: np.bytes_):
         sequence_batch = sequence
-        logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
-        logger.info(f"[_infer_fn_embedding] max_length: {max_length}")
         pooler = pooler.decode("utf-8")
-        logger.info(f"[_infer_fn_embedding] pooler: {pooler}")
+        # logger.info(f"[_infer_fn_embedding] sequence: {sequence_batch}")
+        logger.info(f"[_infer_fn_embedding] sequence len: {len(sequence_batch)}; max_length: {max_length}, pooler: {pooler}")
         
         # need to convert dtype=object to bytes first
         # end decode unicode bytes
@@ -136,6 +135,40 @@ class _InferFuncWrapper:
         last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
         logger.info(f"[_infer_fn_embedding] last_hidden_states shape: {last_hidden_states.shape}")
         return {"last_hidden_state": last_hidden_states}
+    
+    # @batch
+    # @group_by_values("max_length", "pooler")
+    # @first_value("max_length", "pooler")
+    # def __call__(self, sequence: np.ndarray, max_length: np.int32, pooler: np.bytes_):
+    #     sequence_batch = sequence
+    #     pooler = pooler.decode("utf-8")
+    #     # logger.info(f"[_infer_fn_embedding] sequence: {sequence_batch}")
+    #     logger.info(f"[_infer_fn_embedding] sequence len: {len(sequence_batch)}; max_length: {max_length}, pooler: {pooler}")
+
+    #     # need to convert dtype=object to bytes first
+    #     # end decode unicode bytes
+    #     sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
+    #     # logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
+    #     # import itertools
+    #     # sequence_batch = list(itertools.chain(*sequence_batch))
+    #     sequence_batch = [s[0] for s in sequence_batch]
+    #     logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
+
+    #     inputs = self._tokenizer(
+    #         sequence_batch, 
+    #         padding=True,
+    #         truncation=True,
+    #         max_length=max_length,
+    #         return_tensors="pt"
+    #     )
+    #     inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
+    #     results = self._model(**inputs_on_device, return_dict=True)
+    #     # logger.info(f"[_infer_fn_embedding] results: {results}")
+
+    #     last_hidden_states = results.last_hidden_state.unsqueeze(1).cpu().detach().numpy()
+    #     last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
+    #     logger.info(f"[_infer_fn_embedding] last_hidden_states shape: {last_hidden_states.shape}")
+    #     return {"last_hidden_state": last_hidden_states}
     
     # @batch
     # def __call__(self, **inputs: np.ndarray):
