@@ -54,8 +54,9 @@ class TimeUtils(object):
             time_str = "[{}]".format(task_name)
             for i in range(len(self.task_dict[task_name]) - 1):
                 time_str += "[{}] {}s; ".format(
-                    self.task_dict[task_name][i+1][0], round(self.task_dict[task_name][i+1][1] - self.task_dict[task_name][i][1], 3))
+                    self.task_dict[task_name][i+1][0], round(self.task_dict[task_name][i+1][1] - self.task_dict[task_name][i][1], 5))
             logger.warning(time_str)
-            logger.warning("[{}][total] {}s".format(task_name, round(self.task_dict[task_name][-1][1] - self.task_dict[task_name][0][1], 3)))
+            logger.warning("[{}][total] {}s".format(task_name, round(self.task_dict[task_name][-1][1] - self.task_dict[task_name][0][1], 5)))
+            self.task_dict.pop(task_name)
         else:
             logger.warning("[print] task_name: {} not exist. ".format(task_name))
