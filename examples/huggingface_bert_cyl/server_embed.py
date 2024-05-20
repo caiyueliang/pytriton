@@ -16,7 +16,7 @@
 
 from loguru import logger
 from typing import Any, List
-
+import uuid
 import os
 import argparse
 import numpy as np
@@ -45,7 +45,8 @@ class _InferFuncWrapper:
     @group_by_values("max_length", "pooler")
     @first_value("max_length", "pooler")
     def __call__(self, sequence: np.ndarray, max_length: np.int32, pooler: np.bytes_):
-        TimeUtils().start(task_name="embedding")
+        task_name = f"embedding_{uuid.uuid1()}"
+        TimeUtils().start(task_name=task_name)
         sequence_batch = sequence
         pooler = pooler.decode("utf-8")
         # logger.info(f"[_infer_fn_embedding] sequence: {sequence_batch}")
@@ -68,9 +69,9 @@ class _InferFuncWrapper:
             return_tensors="pt"
         )
         inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-        TimeUtils().append("前处理", task_name="embedding")
+        TimeUtils().append("前处理", task_name=task_name)
         outputs = self._model(**inputs_on_device, return_dict=True)
-        TimeUtils().append("推理", task_name="embedding")
+        TimeUtils().append("推理", task_name=task_name)
         # logger.info(f"[_infer_fn_embedding] outputs: {outputs}")
 
         # ================================================================================================
@@ -96,8 +97,8 @@ class _InferFuncWrapper:
         embeddings = embeddings.cpu().detach().numpy()
         logger.info(f"[_infer_fn_embedding] embeddings shape: {embeddings.shape}")
 
-        TimeUtils().append("后处理", task_name="embedding")
-        TimeUtils().print(task_name="embedding")
+        TimeUtils().append("后处理", task_name=task_name)
+        TimeUtils().print(task_name=task_name)
         return {"embedding": embeddings}
         # ================================================================================================
 
@@ -195,7 +196,13 @@ if __name__ == "__main__":
     args = parse_argvs()
 
     log_verbose = 1 if args.verbose else 0
-    config = TritonConfig(exit_on_error=True, log_verbose=log_verbose)
+    config = TritonConfig(
+        exit_on_error=True, 
+        log_verbose=log_verbose,
+        http_port=18080,
+        # http_thread_count=10,
+        grpc_port=18081,
+        metrics_port=18082)
 
     devices = [device] * args.instances_number
 
