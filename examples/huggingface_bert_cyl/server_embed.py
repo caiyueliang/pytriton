@@ -27,6 +27,7 @@ from pytriton.decorators import batch, first_value, group_by_values
 from pytriton.model_config import DynamicBatcher, ModelConfig, Tensor
 from pytriton.triton import Triton, TritonConfig
 from utils.time_utils import TimeUtils
+import base64
 
 
 model_folder_embedding = os.environ["MODEL_PATH_EMBEDDING"]
@@ -41,12 +42,13 @@ class _InferFuncWrapper:
         self._device = device
         self._tokenizer = tokenizer
 
+    # 返回的embedding转换成bytes
     @batch
     @group_by_values("max_length", "pooler")
     @first_value("max_length", "pooler")
     def __call__(self, sequence: np.ndarray, max_length: np.int32, pooler: np.bytes_):
-        task_name = f"embedding_{uuid.uuid1()}"
-        TimeUtils().start(task_name=task_name)
+        # task_name = f"embedding_{uuid.uuid1()}"
+        # TimeUtils().start(task_name=task_name)
         sequence_batch = sequence
         pooler = pooler.decode("utf-8")
         # logger.info(f"[_infer_fn_embedding] sequence: {sequence_batch}")
@@ -69,9 +71,9 @@ class _InferFuncWrapper:
             return_tensors="pt"
         )
         inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-        TimeUtils().append("前处理", task_name=task_name)
+        # TimeUtils().append("前处理", task_name=task_name)
         outputs = self._model(**inputs_on_device, return_dict=True)
-        TimeUtils().append("推理", task_name=task_name)
+        # TimeUtils().append("推理", task_name=task_name)
         # logger.info(f"[_infer_fn_embedding] outputs: {outputs}")
 
         # ================================================================================================
@@ -95,14 +97,18 @@ class _InferFuncWrapper:
         # embeddings = torch.cat(embeddings_collection, dim=0)
         # embeddings = embeddings.detach().numpy()
         embeddings = embeddings.cpu().detach().numpy()
-        logger.info(f"[_infer_fn_embedding] embeddings shape: {embeddings.shape}")
+        logger.info(f"[_infer_fn_embedding] embeddings shape: {embeddings.shape}, {type(embeddings)}")
 
-        TimeUtils().append("后处理", task_name=task_name)
-        TimeUtils().print(task_name=task_name)
+        # embeddings = base64.b64encode(embeddings.tobytes()).decode('utf-8')
+        # logger.info(f"[_infer_fn_embedding] base64: len: {len(embeddings)}")
+        embeddings = np.array([[base64.b64encode(embeddings.tobytes()).decode('utf-8')]])
+        # logger.info(f"[_infer_fn_embedding] embeddings: {embeddings}")
+        # TimeUtils().append("后处理", task_name=task_name)
+        # TimeUtils().print(task_name=task_name)
         return {"embedding": embeddings}
         # ================================================================================================
 
-        
+    # 返回的embedding不进行压缩
     # @batch
     # @group_by_values("max_length", "pooler")
     # @first_value("max_length", "pooler")
@@ -280,7 +286,8 @@ if __name__ == "__main__":
             ],
             outputs=[
                 # Tensor(name="last_hidden_state", dtype=np.float32, shape=(-1, -1, -1)),
-                Tensor(name="embedding", dtype=np.float16, shape=(-1,)),
+                # Tensor(name="embedding", dtype=np.float16, shape=(-1,)),
+                Tensor(name="embedding", dtype=np.bytes_, shape=(-1,)),
             ],
             config=ModelConfig(
                 max_batch_size=args.max_batch_size,
