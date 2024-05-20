@@ -33,7 +33,7 @@ def infer(url, init_timeout_s, times, sequence, max_length, pooler, result_queue
 
             for output_name, output_data in result_dict.items():
                 output_data = np.array2string(output_data, max_line_width=np.inf, separator=",").replace("\n", "")
-                # logger.info(f"{output_name}: len: {len(output_data)}; {output_data}")
+                logger.info(f"{output_name}: len: {len(output_data)}; {output_data}")
             end = time.time() * 1000
             times_list.append(end-start)
     

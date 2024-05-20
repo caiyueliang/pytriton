@@ -33,68 +33,6 @@ model_folder_embedding = os.environ["MODEL_PATH_EMBEDDING"]
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 torch_dtype = torch.float16
 
-# @batch
-# def _infer_fn_embedding(**inputs: np.ndarray):
-#     # logger.info(f"[_infer_fn_embedding] inputs: {inputs}")
-#     (sequence_batch,) = inputs.values()
-#     logger.info(f"[_infer_fn_embedding] sequence_batch: {len(sequence_batch)}")
-#     # need to convert dtype=object to bytes first
-#     # end decode unicode bytes
-#     sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
-#     # logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
-
-#     last_hidden_states = []
-#     for sequence_item in sequence_batch:
-#         # tokenized_sequence = tokenizer(sequence_item.item(), return_tensors="jax")
-#         # results = model(**tokenized_sequence)
-#         # logger.info(f"[_infer_fn_embedding] sequence_item: {sequence_item.item()}")
-#         inputs = tokenizer(
-#                         sequence_item.item(), 
-#                         padding=True,
-#                         truncation=True,
-#                         max_length=512,
-#                         return_tensors="pt"
-#                     )
-#         inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-#         results = model(**inputs_on_device, return_dict=True)
-        
-#         last_hidden_states.append(results.last_hidden_state.cpu().detach().numpy())
-    
-#         # logger.info(f"[_infer_fn_embedding] last_hidden_states: {last_hidden_states}")
-
-#     last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
-#     logger.info(f"[_infer_fn_embedding] last_hidden_states: {last_hidden_states.shape}")
-#     l = [last_hidden_states]
-#     logger.info(f"[_infer_fn_embedding] len: {len(l)}; {l}")
-#     return l
-
-# @batch
-# def _infer_fn_embedding(**inputs: np.ndarray):
-#     # logger.info(f"[_infer_fn_embedding] inputs: {inputs}")
-#     (sequence_batch,) = inputs.values()
-#     logger.info(f"[_infer_fn_embedding] sequence_batch: {len(sequence_batch)}")
-#     # need to convert dtype=object to bytes first
-#     # end decode unicode bytes
-#     sequence_batch = np.char.decode(sequence_batch.astype("bytes"), "utf-8")
-#     sequence_batch = [s[0] for s in sequence_batch]
-#     logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
-
-#     inputs = tokenizer(
-#         sequence_batch, 
-#         padding=True,
-#         truncation=True,
-#         max_length=512,
-#         return_tensors="pt"
-#     )
-#     inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-#     results = model(**inputs_on_device, return_dict=True)
-#     # logger.info(f"[_infer_fn_embedding] results: {results}")
-
-#     last_hidden_states = results.last_hidden_state.unsqueeze(1).cpu().detach().numpy()
-#     last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
-#     logger.info(f"[_infer_fn_embedding] last_hidden_states shape: {last_hidden_states.shape}")
-#     return [last_hidden_states]
-
 
 class _InferFuncWrapper:
     def __init__(self, model: Any, tokenizer: Any, device: str):
@@ -120,6 +58,7 @@ class _InferFuncWrapper:
         sequence_batch = [s[0] for s in sequence_batch]
         logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
 
+        embeddings_collection = []
         inputs = self._tokenizer(
             sequence_batch, 
             padding=True,
@@ -128,13 +67,35 @@ class _InferFuncWrapper:
             return_tensors="pt"
         )
         inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-        results = self._model(**inputs_on_device, return_dict=True)
-        # logger.info(f"[_infer_fn_embedding] results: {results}")
+        outputs = self._model(**inputs_on_device, return_dict=True)
+        # logger.info(f"[_infer_fn_embedding] outputs: {outputs}")
 
-        last_hidden_states = results.last_hidden_state.unsqueeze(1).cpu().detach().numpy()
-        last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
-        logger.info(f"[_infer_fn_embedding] last_hidden_states shape: {last_hidden_states.shape}")
-        return {"last_hidden_state": last_hidden_states}
+        # ================================================================================================
+        # last_hidden_states = outputs.last_hidden_state.unsqueeze(1).cpu().detach().numpy()
+        # last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
+        # logger.info(f"[_infer_fn_embedding] last_hidden_states shape: {last_hidden_states.shape}")
+        # return {"last_hidden_state": embeddings}
+        # ================================================================================================
+        if pooler == "cls":
+            embeddings = outputs.last_hidden_state[:, 0]
+        elif pooler == "mean":
+            attention_mask = inputs_on_device['attention_mask']
+            last_hidden = outputs.last_hidden_state
+            embeddings = (last_hidden * attention_mask.unsqueeze(-1).float()).sum(1) / attention_mask.sum(-1).unsqueeze(-1)
+        else:
+            raise NotImplementedError
+                
+        # Normalize embedddings
+        embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
+        embeddings_collection.append(embeddings.cpu())
+
+        embeddings = torch.cat(embeddings_collection, dim=0)
+        embeddings = embeddings.detach().numpy()
+        logger.info(f"[_infer_fn_embedding] embeddings shape: {embeddings.shape}")
+
+        return {"embedding": embeddings}
+        # ================================================================================================
+
     
     # @batch
     # @group_by_values("max_length", "pooler")
@@ -244,10 +205,15 @@ if __name__ == "__main__":
                 Tensor(name="pooler", dtype=np.bytes_, shape=(1,)),
             ],
             outputs=[
+                # Tensor(
+                #     name="last_hidden_state",
+                #     dtype=np.float32,
+                #     shape=(-1, -1, -1),
+                # ),
                 Tensor(
-                    name="last_hidden_state",
-                    dtype=np.float32,
-                    shape=(-1, -1, -1),
+                    name="embedding",
+                    dtype=np.float16,
+                    shape=(-1,),
                 ),
             ],
             config=ModelConfig(
