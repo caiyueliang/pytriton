@@ -26,6 +26,7 @@ from transformers import AutoModel, AutoTokenizer
 from pytriton.decorators import batch, first_value, group_by_values
 from pytriton.model_config import DynamicBatcher, ModelConfig, Tensor
 from pytriton.triton import Triton, TritonConfig
+from utils.time_utils import TimeUtils
 
 
 model_folder_embedding = os.environ["MODEL_PATH_EMBEDDING"]
@@ -44,6 +45,7 @@ class _InferFuncWrapper:
     @group_by_values("max_length", "pooler")
     @first_value("max_length", "pooler")
     def __call__(self, sequence: np.ndarray, max_length: np.int32, pooler: np.bytes_):
+        TimeUtils().start(task_name="embedding")
         sequence_batch = sequence
         pooler = pooler.decode("utf-8")
         # logger.info(f"[_infer_fn_embedding] sequence: {sequence_batch}")
@@ -58,7 +60,6 @@ class _InferFuncWrapper:
         sequence_batch = [s[0] for s in sequence_batch]
         logger.info(f"[_infer_fn_embedding] sequence_batch: {sequence_batch}")
 
-        embeddings_collection = []
         inputs = self._tokenizer(
             sequence_batch, 
             padding=True,
@@ -67,7 +68,9 @@ class _InferFuncWrapper:
             return_tensors="pt"
         )
         inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
+        TimeUtils().append("前处理", task_name="embedding")
         outputs = self._model(**inputs_on_device, return_dict=True)
+        TimeUtils().append("推理", task_name="embedding")
         # logger.info(f"[_infer_fn_embedding] outputs: {outputs}")
 
         # ================================================================================================
@@ -87,12 +90,14 @@ class _InferFuncWrapper:
                 
         # Normalize embedddings
         embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
-        embeddings_collection.append(embeddings.cpu())
-
-        embeddings = torch.cat(embeddings_collection, dim=0)
-        embeddings = embeddings.detach().numpy()
+        # embeddings_collection.append(embeddings.cpu())
+        # embeddings = torch.cat(embeddings_collection, dim=0)
+        # embeddings = embeddings.detach().numpy()
+        embeddings = embeddings.cpu().detach().numpy()
         logger.info(f"[_infer_fn_embedding] embeddings shape: {embeddings.shape}")
 
+        TimeUtils().append("后处理", task_name="embedding")
+        TimeUtils().print(task_name="embedding")
         return {"embedding": embeddings}
         # ================================================================================================
 
@@ -205,16 +210,8 @@ if __name__ == "__main__":
                 Tensor(name="pooler", dtype=np.bytes_, shape=(1,)),
             ],
             outputs=[
-                # Tensor(
-                #     name="last_hidden_state",
-                #     dtype=np.float32,
-                #     shape=(-1, -1, -1),
-                # ),
-                Tensor(
-                    name="embedding",
-                    dtype=np.float16,
-                    shape=(-1,),
-                ),
+                # Tensor(name="last_hidden_state", dtype=np.float32, shape=(-1, -1, -1)),
+                Tensor(name="embedding", dtype=np.float16, shape=(-1,)),
             ],
             config=ModelConfig(
                 max_batch_size=args.max_batch_size,
