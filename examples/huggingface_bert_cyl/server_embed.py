@@ -393,8 +393,10 @@ if __name__ == "__main__":
         exit_on_error=True, 
         log_verbose=log_verbose,
         http_port=18080,
-        # http_thread_count=10,
+        http_thread_count=100,
         grpc_port=18081,
+        grpc_infer_allocation_pool_size=1000,
+        grpc_infer_response_compression_level='high',
         metrics_port=18082)
 
     devices = [device] * args.instances_number
