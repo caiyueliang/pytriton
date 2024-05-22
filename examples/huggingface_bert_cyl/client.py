@@ -74,6 +74,7 @@ def main():
     parser.add_argument("--init-timeout-s", type=float, default=600.0, help="Server and model ready state timeout in seconds", required=False)
     parser.add_argument("--iterations", type=int, default=1, help="Number of requests per client.", required=False)
     parser.add_argument("--text", type=str, default="我是中国人", required=False)
+    parser.add_argument("--use_trt", type=bool, default=False, required=False)
     parser.add_argument("--verbose", action="store_true", default=False)
     parser.add_argument("--num_thread", type=int, default=1, help="Number of requests per client.", required=False)
     args = parser.parse_args()
@@ -84,7 +85,7 @@ def main():
     sequence = np.array([args.text.encode('utf-8')])
     max_length = np.array([512], dtype=np.int32)
     pooler = np.array([b"cls"])
-    use_trt = np.array([False], dtype=np.bool_)
+    use_trt = np.array([args.use_trt], dtype=np.bool_)
     # sequence = np.array(["你好，介绍一下你自己"])
 
     logger.info(f"Input: {sequence}")

@@ -49,20 +49,20 @@ class _InferFuncWrapper:
         model.eval()
         
         # ---------------------------------------------------------------------------
-        # logger.info("tensorrt embedding model folder: {}".format(model_path))
-        # model_trt = Engine(engine_path=trt_model_path)
-        # model_trt.load()
-        # model_trt.activate()
-        # logger.warning(f"[bce_embedding_trt] {model_trt}")
-        # err, stream = cudart.cudaStreamCreate()
-        # self.stream = stream
+        logger.info("tensorrt embedding model folder: {}".format(model_path))
+        model_trt = Engine(engine_path=trt_model_path)
+        model_trt.load()
+        model_trt.activate()
+        logger.warning(f"[bce_embedding_trt] {model_trt}")
+        err, stream = cudart.cudaStreamCreate()
+        self.stream = stream
         # ---------------------------------------------------------------------------
 
         self._device = device
         self._torch_dtype = torch_dtype
         self._model = model
         self._tokenizer = tokenizer
-        # self._model_trt = model_trt
+        self._model_trt = model_trt
 
     # 使用TRT
     @batch
@@ -81,7 +81,7 @@ class _InferFuncWrapper:
         # import itertools
         # sequence_batch = list(itertools.chain(*sequence_batch))
         sequence_batch = [s[0] for s in sequence_batch]
-        logger.info(f"[_infer_fn_embedding] max_length: {max_length}, pooler: {pooler}， use_trt: {type(use_trt)}, {use_trt}, sequence_batch: len: {len(sequence_batch)}; text: {sequence_batch}")
+        logger.info(f"[_infer_fn_embedding] max_length: {max_length}, pooler: {pooler}， use_trt: {use_trt}, sequence_batch: len: {len(sequence_batch)}; text: {sequence_batch}")
 
         inputs = self._tokenizer(
             sequence_batch, 
