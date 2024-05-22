@@ -59,7 +59,7 @@ class _InferFuncWrapper:
         # import itertools
         # sequence_batch = list(itertools.chain(*sequence_batch))
         sequence_batch = [s[0] for s in sequence_batch]
-        logger.info(f"[_infer_fn_embedding] sequence len: {len(sequence_batch)}; max_length: {max_length}, pooler: {pooler}， sequence_batch: {sequence_batch}")
+        logger.info(f"[_infer_fn_embedding] max_length: {max_length}, pooler: {pooler}， sequence_batch: len: {len(sequence_batch)}; text: {sequence_batch}")
 
         inputs = self._tokenizer(
             sequence_batch, 
