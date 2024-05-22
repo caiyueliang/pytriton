@@ -27,26 +27,48 @@ from pytriton.decorators import batch, first_value, group_by_values
 from pytriton.model_config import DynamicBatcher, ModelConfig, Tensor
 from pytriton.triton import Triton, TritonConfig
 from utils.time_utils import TimeUtils
-import base64
 
+from models.engine_1 import Engine
+from cuda import cudart
 
 model_folder_embedding = os.environ["MODEL_PATH_EMBEDDING"]
+trt_model_folder_embedding = os.environ["TRT_MODEL_PATH_EMBEDDING"]
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 torch_dtype = torch.float16
 
 
 class _InferFuncWrapper:
-    def __init__(self, model: Any, tokenizer: Any, device: str):
-        self._model = model
+    def __init__(self, model_path, trt_model_path, torch_dtype, device):
+        logger.info("init model on: {}".format(str(device)))
+        logger.info("embedding model folder: {}".format(model_path))
+
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModel.from_pretrained(model_path, torch_dtype=torch_dtype)
+        model.to(device)
+        model.eval()
+        
+        # ---------------------------------------------------------------------------
+        # logger.info("tensorrt embedding model folder: {}".format(model_path))
+        # model_trt = Engine(engine_path=trt_model_path)
+        # model_trt.load()
+        # model_trt.activate()
+        # logger.warning(f"[bce_embedding_trt] {model_trt}")
+        # err, stream = cudart.cudaStreamCreate()
+        # self.stream = stream
+        # ---------------------------------------------------------------------------
+
         self._device = device
+        self._torch_dtype = torch_dtype
+        self._model = model
         self._tokenizer = tokenizer
+        # self._model_trt = model_trt
 
     # 使用TRT
     @batch
-    @group_by_values("max_length", "pooler")
-    @first_value("max_length", "pooler")
-    def __call__(self, sequence: np.ndarray, max_length: np.int32, pooler: np.bytes_):
+    @group_by_values("max_length", "pooler", "use_trt")
+    @first_value("max_length", "pooler", "use_trt")
+    def __call__(self, sequence: np.ndarray, max_length: np.int32, pooler: np.bytes_, use_trt: np.bool_):
         task_name = f"embedding_{uuid.uuid1()}"
         TimeUtils().start(task_name=task_name)
         sequence_batch = sequence
@@ -59,7 +81,7 @@ class _InferFuncWrapper:
         # import itertools
         # sequence_batch = list(itertools.chain(*sequence_batch))
         sequence_batch = [s[0] for s in sequence_batch]
-        logger.info(f"[_infer_fn_embedding] max_length: {max_length}, pooler: {pooler}， sequence_batch: len: {len(sequence_batch)}; text: {sequence_batch}")
+        logger.info(f"[_infer_fn_embedding] max_length: {max_length}, pooler: {pooler}， use_trt: {type(use_trt)}, {use_trt}, sequence_batch: len: {len(sequence_batch)}; text: {sequence_batch}")
 
         inputs = self._tokenizer(
             sequence_batch, 
@@ -68,26 +90,40 @@ class _InferFuncWrapper:
             max_length=max_length,
             return_tensors="pt"
         )
-        inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-        TimeUtils().append("前处理", task_name=task_name)
-        outputs = self._model(**inputs_on_device, return_dict=True)
-        TimeUtils().append("推理", task_name=task_name)
-        # logger.info(f"[_infer_fn_embedding] outputs: {outputs}")
 
-        # ================================================================================================
-        # last_hidden_states = outputs.last_hidden_state.unsqueeze(1).cpu().detach().numpy()
-        # last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
-        # logger.info(f"[_infer_fn_embedding] last_hidden_states shape: {last_hidden_states.shape}")
-        # return {"last_hidden_state": embeddings}
-        # ================================================================================================
-        if pooler == "cls":
-            embeddings = outputs.last_hidden_state[:, 0]
-        elif pooler == "mean":
-            attention_mask = inputs_on_device['attention_mask']
-            last_hidden = outputs.last_hidden_state
-            embeddings = (last_hidden * attention_mask.unsqueeze(-1).float()).sum(1) / attention_mask.sum(-1).unsqueeze(-1)
+
+        TimeUtils().append("前处理", task_name=task_name)
+        if use_trt.item() is False:
+            inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
+            outputs = self._model(**inputs_on_device, return_dict=True)
+            # logger.info(f"[_infer_fn_embedding] outputs: {outputs}")
+
+            # ================================================================================================
+            # last_hidden_states = outputs.last_hidden_state.unsqueeze(1).cpu().detach().numpy()
+            # last_hidden_states = np.array(last_hidden_states, dtype=np.float32)
+            # logger.info(f"[_infer_fn_embedding] last_hidden_states shape: {last_hidden_states.shape}")
+            # return {"last_hidden_state": embeddings}
+            # ================================================================================================
+            if pooler == "cls":
+                embeddings = outputs.last_hidden_state[:, 0]
+            elif pooler == "mean":
+                attention_mask = inputs_on_device['attention_mask']
+                last_hidden = outputs.last_hidden_state
+                embeddings = (last_hidden * attention_mask.unsqueeze(-1).float()).sum(1) / attention_mask.sum(-1).unsqueeze(-1)
+            else:
+                raise NotImplementedError
         else:
-            raise NotImplementedError
+            # ========================================================================================================
+            # trt
+            outputs = self._model_trt.infer(feed_dict=inputs, stream=self.stream)['output_0'].clone()
+            # logging.warning(f"[trt] [last_hidden_state] {embeddings.size()}")
+            # logging.warning(f"[trt] [last_hidden_state] {embeddings}")
+            embeddings = embeddings[:, 0]
+            logger.warning(f"[trt] [embeddings] {embeddings.size()}")
+            # logging.info(f"[trt] [embeddings] {embeddings}")
+            # ========================================================================================================
+
+        TimeUtils().append("推理", task_name=task_name)
                 
         # Normalize embedddings
         embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
@@ -365,13 +401,10 @@ def _infer_function_factory(devices: List[str]):
     infer_funcs = []
     for device in devices:
         # 实例化embedding类
-        logger.info("init model on: {}".format(str(device)))
-        logger.info("embedding model folder: {}".format(model_folder_embedding))
-        tokenizer = AutoTokenizer.from_pretrained(model_folder_embedding)
-        model = AutoModel.from_pretrained(model_folder_embedding, torch_dtype=torch_dtype)
-        model.to(device)
-        model.eval()
-        infer_funcs.append(_InferFuncWrapper(model=model, tokenizer=tokenizer, device=device))
+        infer_funcs.append(_InferFuncWrapper(model_path=model_folder_embedding,
+                                             trt_model_path=trt_model_folder_embedding,
+                                             torch_dtype=torch_dtype, 
+                                             device=device))
 
     return infer_funcs
 
@@ -410,6 +443,7 @@ if __name__ == "__main__":
                 Tensor(name="sequence", dtype=np.bytes_, shape=(-1,)),
                 Tensor(name="max_length", dtype=np.int32, shape=(1,)),
                 Tensor(name="pooler", dtype=np.bytes_, shape=(1,)),
+                Tensor(name="use_trt", dtype=np.bool_, shape=(1,)),
             ],
             outputs=[
                 # Tensor(name="last_hidden_state", dtype=np.float32, shape=(-1, -1, -1)),

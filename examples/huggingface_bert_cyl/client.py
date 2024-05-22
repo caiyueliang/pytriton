@@ -24,23 +24,22 @@ import numpy as np
 
 from pytriton.client import ModelClient
 
-def infer(url, init_timeout_s, times, sequence, max_length, pooler, result_queue):
+def infer(url, init_timeout_s, times, sequence, max_length, pooler, use_trt, result_queue):
     times_list = []
     with ModelClient(url, "BERT", init_timeout_s=init_timeout_s) as client:
         for i in range(times):
             start = time.time() * 1000
-            result_dict = client.infer_sample(sequence, max_length, pooler)
-
-            # for output_name, output_data in result_dict.items():
-            #     output_data = np.array2string(output_data, max_line_width=np.inf, separator=",").replace("\n", "")
-            #     logger.info(f"{output_name}: len: {len(output_data)}; {output_data}")
+            result_dict = client.infer_sample(sequence, max_length, pooler, use_trt)
+            embedding = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
+            embedding = embedding.tolist()
+            logger.info(f"[send_request] embedding: len: {len(embedding[0])}\n{embedding[0][:10]}; \n{embedding[0][-10:]}")
             end = time.time() * 1000
             times_list.append(end-start)
     
     result_queue.put(times_list)
     # return True
 
-def start_process(num_processes, url, init_timeout_s, times, sequence, max_length, pooler):
+def start_process(num_processes, url, init_timeout_s, times, sequence, max_length, pooler, use_trt):
     # 创建一个 Queue 用于接收进程的返回数据
     # result_queue = Queue()
     result_queue = JoinableQueue()
@@ -49,7 +48,7 @@ def start_process(num_processes, url, init_timeout_s, times, sequence, max_lengt
     for i in range(num_processes):
         # 可以为每个进程定制不同的参数
         # custom_params = {**base_params, f"param_{i}": f"value_{i}"}
-        p = Process(target=infer, args=(url, init_timeout_s, times, sequence, max_length, pooler, result_queue))
+        p = Process(target=infer, args=(url, init_timeout_s, times, sequence, max_length, pooler, use_trt, result_queue))
         processes.append(p)
         p.start()
 
@@ -85,6 +84,7 @@ def main():
     sequence = np.array([args.text.encode('utf-8')])
     max_length = np.array([512], dtype=np.int32)
     pooler = np.array([b"cls"])
+    use_trt = np.array([False], dtype=np.bool_)
     # sequence = np.array(["你好，介绍一下你自己"])
 
     logger.info(f"Input: {sequence}")
@@ -93,7 +93,7 @@ def main():
     start_t = time.time()
 
     start_process(num_processes=args.num_thread, url=args.url, init_timeout_s=args.init_timeout_s, times=args.iterations, 
-                  sequence=sequence, max_length=max_length, pooler=pooler)
+                  sequence=sequence, max_length=max_length, pooler=pooler, use_trt=use_trt)
     # infer(args.url, args.init_timeout_s, sequence)
 
     end_t = time.time()
