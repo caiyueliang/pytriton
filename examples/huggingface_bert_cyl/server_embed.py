@@ -47,8 +47,8 @@ class _InferFuncWrapper:
     @group_by_values("max_length", "pooler")
     @first_value("max_length", "pooler")
     def __call__(self, sequence: np.ndarray, max_length: np.int32, pooler: np.bytes_):
-        # task_name = f"embedding_{uuid.uuid1()}"
-        # TimeUtils().start(task_name=task_name)
+        task_name = f"embedding_{uuid.uuid1()}"
+        TimeUtils().start(task_name=task_name)
         sequence_batch = sequence
         pooler = pooler.decode("utf-8")
         # logger.info(f"[_infer_fn_embedding] sequence len: {len(sequence_batch)}; max_length: {max_length}, pooler: {pooler}")
@@ -70,9 +70,9 @@ class _InferFuncWrapper:
             return_tensors="pt"
         )
         inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-        # TimeUtils().append("前处理", task_name=task_name)
+        TimeUtils().append("前处理", task_name=task_name)
         outputs = self._model(**inputs_on_device, return_dict=True)
-        # TimeUtils().append("推理", task_name=task_name)
+        TimeUtils().append("推理", task_name=task_name)
         # logger.info(f"[_infer_fn_embedding] outputs: {outputs}")
 
         # ================================================================================================
@@ -95,25 +95,13 @@ class _InferFuncWrapper:
         # embeddings_collection.append(embeddings.cpu())
         # embeddings = torch.cat(embeddings_collection, dim=0)
         # embeddings = embeddings.detach().numpy()
-        embeddings = embeddings.cpu().detach().numpy()
-
-        # import ipdb
-        # ipdb.set_trace()
-        # ========================================================================================================================
-        # logger.info(f"[_infer_fn_embedding] embeddings shape: {type(embeddings)}, {embeddings.shape}, {embeddings}")
-        # embeddings = base64.b64encode(embeddings.tobytes()).decode('utf-8')
-        # # logger.info(f"[_infer_fn_embedding] base64: len: {len(embeddings)}, {embeddings}")
-        # embeddings = np.array([[embeddings]])
-        # logger.info(f"[_infer_fn_embedding] bytes_: len: {len(embeddings[0][0])}, {type({embeddings[0][0]})}, {embeddings}")
-        # ========================================================================================================================
-        # embeddings = embeddings.tobytes()
-        embeddings = np.array([[embeddings.tobytes()]], dtype=np.bytes_)
-        # embeddings = np.frombuffer(embeddings, dtype=np.bytes_)
+        embeddings = embeddings.cpu().detach().numpy().tobytes()
+        embeddings = np.array([[embeddings]], dtype=np.bytes_)
         # logger.info(f"[_infer_fn_embedding] bytes_: len: {len(embeddings[0][0])}, {type({embeddings[0][0]})}, {embeddings}")
         # ========================================================================================================================
 
-        # TimeUtils().append("后处理", task_name=task_name)
-        # TimeUtils().print(task_name=task_name)
+        TimeUtils().append("后处理", task_name=task_name)
+        TimeUtils().print(task_name=task_name)
         return {"embedding": embeddings}
         # ================================================================================================
 
