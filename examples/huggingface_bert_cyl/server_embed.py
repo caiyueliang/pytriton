@@ -47,6 +47,7 @@ class _InferFuncWrapper:
         model = AutoModel.from_pretrained(model_path, torch_dtype=torch_dtype)
         model.to(device)
         model.eval()
+        # model = torch.compile(model)
         
         # # ---------------------------------------------------------------------------
         # logger.info("tensorrt embedding model folder: {}".format(model_path))
@@ -90,12 +91,18 @@ class _InferFuncWrapper:
             max_length=max_length,
             return_tensors="pt"
         )
-
-
-        TimeUtils().append("前处理", task_name=task_name)
+        # inputs = self._tokenizer(
+        #     sequence_batch,
+        #     truncation=True,
+        #     padding="max_length",
+        #     max_length=max_length,
+        #     return_tensors="pt"
+        # )
 
         inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
+        TimeUtils().append("前处理", task_name=task_name)
         outputs = self._model(**inputs_on_device, return_dict=True)
+        TimeUtils().append("推理", task_name=task_name)
         # logger.info(f"[_infer_fn_embedding] outputs: {outputs}")
 
         # ================================================================================================
@@ -112,8 +119,6 @@ class _InferFuncWrapper:
             embeddings = (last_hidden * attention_mask.unsqueeze(-1).float()).sum(1) / attention_mask.sum(-1).unsqueeze(-1)
         else:
             raise NotImplementedError
-
-        TimeUtils().append("推理", task_name=task_name)
                 
         # Normalize embedddings
         embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
