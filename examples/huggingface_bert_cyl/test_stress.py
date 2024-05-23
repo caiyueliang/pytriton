@@ -20,31 +20,21 @@ from pytriton.client import ModelClient
 from utils import utils
 
 
-HEADER = {'Content-Type': 'application/json; charset=utf-8'}
+# HEADER = {'Content-Type': 'application/json; charset=utf-8'}
 
 
-# def bot_response(url, request_dict):
-#     rsp = requests.post(url, data=json.dumps(request_dict), headers=HEADER)
-#     return rsp.status_code
 
-
-# def bot_response(url):
-#     start = utils.get_cur_millisecond()
-#     # rsp = requests.post(url, headers=HEADER)
-#     rsp = requests.get(url, headers=HEADER)
-#     end = utils.get_cur_millisecond()
-#     return end - start, rsp.status_code
 
 def infer(url, init_timeout_s, sequence, max_length, pooler):
     with ModelClient(url, "BERT", init_timeout_s=init_timeout_s) as client:
-        start = time.time() * 1000
+        start = utils.get_cur_millisecond()
         result_dict = client.infer_sample(sequence, max_length, pooler)
         # embedding = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
         # embedding = embedding.tolist()
         # logger.info(f"[send_request] embedding: len: {len(embedding[0])}\n{embedding[0][:10]}; \n{embedding[0][-10:]}")
-        end = time.time() * 1000
+        end = utils.get_cur_millisecond()
     
-    return end - start
+    return end - start, 200
 
 def start_threads(url, works, times, init_timeout_s, sequence, max_length, pooler):
     """
@@ -75,8 +65,9 @@ def start_threads(url, works, times, init_timeout_s, sequence, max_length, poole
 
     for task in as_completed(all_task):
         time, result = task.result()
-        time_list.extend(time)
-        result_list.extend(result)
+        # logger.warning(f"[time] {time}, [result] {result}")
+        time_list.append(time)
+        result_list.append(result)
 
     return time_list, result_list, time_used, tps_request
 
@@ -88,7 +79,7 @@ def start_multiprocessing(url, processes, num_thread, times, init_timeout_s, seq
     for i in range(processes):
         all_p.append(pool.apply_async(start_threads, (url, num_thread, times, init_timeout_s, sequence, max_length, pooler)))
 
-    print("[start_multiprocessing] start ...")
+    logger.info("[start_multiprocessing] start ...")
     pool.close()
     pool.join()  # 调用join之前，先调用close函数，否则会出错。执行完close后不会有新的进程加入到pool,join函数等待所有子进程结束
 
@@ -106,8 +97,8 @@ def start_multiprocessing(url, processes, num_thread, times, init_timeout_s, seq
         total_time_p.extend(total_time_thread)
         total_result_p.extend(total_result_thread)
 
-    print("[统计] 总共耗时: %f s" % time_used_max)
-    print("[统计] 每秒处理请求个数: %f" % tps_request_total)
+    logger.warning("[统计] 总共耗时: %f s" % time_used_max)
+    logger.warning("[统计] 每秒处理请求个数: %f" % tps_request_total)
     utils.calc_time_p99(time_list=total_time_p)
     utils.calc_success_rate(result_list=total_result_p)
 

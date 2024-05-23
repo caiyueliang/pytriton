@@ -1,6 +1,7 @@
 import time
 import numpy as np
 import asyncio
+from loguru import logger
 
 
 async def async_io_test(t):
@@ -47,11 +48,11 @@ def calc_time_p99(time_list):
 
     avg = np.mean(time_list)
 
-    print("[总数] %d, [min] %d ms, [max] %d ms, [average] %f ms," % (time_num, min, max, avg.item()))
-    print("[p25] %d ms, [p50] %d ms, [p75] %d ms, [p99] %d ms, [p999] %d ms" % (p25, p50, p75, p99, p999))
-    print("[p99-average] %f, [p99/average] %f" % (p99-avg.item(), float(p99)/avg.item()))
+    logger.warning("[总数] %d, [min] %d ms, [max] %d ms, [average] %f ms," % (time_num, min, max, avg.item()))
+    logger.warning("[p25] %d ms, [p50] %d ms, [p75] %d ms, [p99] %d ms, [p999] %d ms" % (p25, p50, p75, p99, p999))
+    logger.warning("[p99-average] %f, [p99/average] %f" % (p99-avg.item(), float(p99)/avg.item()))
 
 
-def calc_success_rate(reslut_list):
-    num = len(reslut_list)
-    print("[总数] %d [成功率] %f [失败数] %d" % (num, float(reslut_list.count(200))/float(num), num-reslut_list.count(200)))
+def calc_success_rate(result_list):
+    num = len(result_list)
+    logger.warning("[总数] %d [成功率] %f [失败数] %d" % (num, float(result_list.count(200))/float(num), num-result_list.count(200)))
