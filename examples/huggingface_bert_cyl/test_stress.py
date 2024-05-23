@@ -23,8 +23,6 @@ from utils import utils
 # HEADER = {'Content-Type': 'application/json; charset=utf-8'}
 
 
-
-
 def infer(url, init_timeout_s, sequence, max_length, pooler):
     with ModelClient(url, "BERT", init_timeout_s=init_timeout_s) as client:
         start = utils.get_cur_millisecond()
@@ -33,8 +31,16 @@ def infer(url, init_timeout_s, sequence, max_length, pooler):
         # embedding = embedding.tolist()
         # logger.info(f"[send_request] embedding: len: {len(embedding[0])}\n{embedding[0][:10]}; \n{embedding[0][-10:]}")
         end = utils.get_cur_millisecond()
-    
     return end - start, 200
+
+# def infer(client, init_timeout_s, sequence, max_length, pooler):
+#     start = utils.get_cur_millisecond()
+#     result_dict = client.infer_sample(sequence, max_length, pooler)
+#     # embedding = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
+#     # embedding = embedding.tolist()
+#     # logger.info(f"[send_request] embedding: len: {len(embedding[0])}\n{embedding[0][:10]}; \n{embedding[0][-10:]}")
+#     end = utils.get_cur_millisecond()
+#     return end - start, 200
 
 def start_threads(url, works, times, init_timeout_s, sequence, max_length, pooler):
     """
@@ -51,7 +57,8 @@ def start_threads(url, works, times, init_timeout_s, sequence, max_length, poole
 
     # start concurrent request
     start = utils.get_cur_millisecond()
-    for i in range(times):
+
+    for i in range(times): 
         all_task.append(executor.submit(infer, url, init_timeout_s, sequence, max_length, pooler))
 
     wait(all_task, return_when=ALL_COMPLETED)
