@@ -18,6 +18,7 @@ from loguru import logger
 from typing import Any, List
 import uuid
 import os
+# os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 import argparse
 import numpy as np
 import torch
@@ -28,11 +29,14 @@ from pytriton.model_config import DynamicBatcher, ModelConfig, Tensor
 from pytriton.triton import Triton, TritonConfig
 from utils.time_utils import TimeUtils
 
-# from models.engine_1 import Engine
-# from cuda import cudart
-
-model_folder_embedding = os.environ["MODEL_PATH_EMBEDDING"]
-# trt_model_folder_embedding = os.environ["TRT_MODEL_PATH_EMBEDDING"]
+MODEL_PATH_EMBEDDING = os.getenv("MODEL_PATH_EMBEDDING", None)
+MAX_BATCH_SIZE = os.getenv("MAX_BATCH_SIZE", None)
+INSTANCES_NUMBER = os.getenv("INSTANCES_NUMBER", None)
+MAX_DELAY_MICROSECONDS = os.getenv("MAX_DELAY_MICROSECONDS", None)
+TRT_MODEL_PATH_EMBEDDING = os.getenv("TRT_MODEL_PATH_EMBEDDING", None)
+HTTP_PORT = os.getenv("HTTP_PORT", 8080)
+GRPC_PORT = os.getenv("GRPC_PORT", 8081)
+METRICS_PORT = os.getenv("METRICS_PORT", 8082)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 torch_dtype = torch.float16
@@ -70,8 +74,8 @@ class _InferFuncWrapper:
     @group_by_values("max_length", "pooler")
     @first_value("max_length", "pooler")
     def __call__(self, sequence: np.ndarray, max_length: np.int32, pooler: np.bytes_):
-        task_name = f"embedding_{uuid.uuid1()}"
-        TimeUtils().start(task_name=task_name)
+        # task_name = f"embedding_{uuid.uuid1()}"
+        # TimeUtils().start(task_name=task_name)
         sequence_batch = sequence
         pooler = pooler.decode("utf-8")
         
@@ -100,9 +104,9 @@ class _InferFuncWrapper:
         # )
 
         inputs_on_device = {k: v.to(device) for k, v in inputs.items()}
-        TimeUtils().append("前处理", task_name=task_name)
+        # TimeUtils().append("前处理", task_name=task_name)
         outputs = self._model(**inputs_on_device, return_dict=True)
-        TimeUtils().append("推理", task_name=task_name)
+        # TimeUtils().append("推理", task_name=task_name)
         # logger.info(f"[_infer_fn_embedding] outputs: {outputs}")
 
         # ================================================================================================
@@ -130,8 +134,8 @@ class _InferFuncWrapper:
         # logger.info(f"[_infer_fn_embedding] bytes_: len: {len(embeddings[0][0])}, {type({embeddings[0][0]})}, {embeddings}")
         # ========================================================================================================================
 
-        TimeUtils().append("后处理", task_name=task_name)
-        TimeUtils().print(task_name=task_name)
+        # TimeUtils().append("后处理", task_name=task_name)
+        # TimeUtils().print(task_name=task_name)
         return {"embedding": embeddings}
         # ================================================================================================
     
@@ -396,7 +400,7 @@ def _infer_function_factory(devices: List[str]):
     infer_funcs = []
     for device in devices:
         # 实例化embedding类
-        infer_funcs.append(_InferFuncWrapper(model_path=model_folder_embedding,
+        infer_funcs.append(_InferFuncWrapper(model_path=MODEL_PATH_EMBEDDING,
                                              torch_dtype=torch_dtype, 
                                              device=device))
 
@@ -406,9 +410,17 @@ def parse_argvs():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--max_batch_size", type=int, default=128, help="Batch size of request.", required=False)
     parser.add_argument("--max_queue_delay_microseconds", type=int, default=10000, help="Max queue delay microseconds.", required=False)
-    parser.add_argument("--instances_number", type=int, default=1, help="Number of model instances.", required=False)
+    parser.add_argument("--instances_number", type=int, default=4, help="Number of model instances.", required=False)
     parser.add_argument("--verbose", action="store_true", default=False)
     args = parser.parse_args()
+
+    if MAX_BATCH_SIZE:
+        args.max_batch_size = int(MAX_BATCH_SIZE)
+    if MAX_DELAY_MICROSECONDS:
+        args.max_queue_delay_microseconds = int(MAX_DELAY_MICROSECONDS)
+    if INSTANCES_NUMBER:
+        args.instances_number = int(INSTANCES_NUMBER)
+
     logger.info('[parse_argvs] {}'.format(args))
     return args
 
@@ -419,12 +431,10 @@ if __name__ == "__main__":
     config = TritonConfig(
         exit_on_error=True, 
         log_verbose=log_verbose,
-        http_port=18080,
-        http_thread_count=100,
-        grpc_port=18081,
-        grpc_infer_allocation_pool_size=1000,
-        grpc_infer_response_compression_level='high',
-        metrics_port=18082)
+        http_port=int(HTTP_PORT),
+        grpc_port=int(GRPC_PORT),
+        metrics_port=int(METRICS_PORT)
+    )
 
     devices = [device] * args.instances_number
 
