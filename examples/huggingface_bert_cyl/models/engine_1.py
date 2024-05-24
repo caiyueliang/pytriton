@@ -264,17 +264,17 @@ class Engine():
             if shape_dict and binding in shape_dict:
                 shape = shape_dict[binding]
             else:
-                # shape = self.engine.get_binding_shape(binding)
-                shape = self.engine.get_tensor_shape(binding)
+                shape = self.engine.get_binding_shape(binding)
+                # shape = self.engine.get_tensor_shape(binding)
             # logger.info(f"[allocate_buffers] tensor shape: {shape}")
             
-            # dtype = trt.nptype(self.engine.get_binding_dtype(binding))
-            dtype = trt.nptype(self.engine.get_tensor_dtype(binding))
+            dtype = trt.nptype(self.engine.get_binding_dtype(binding))
+            # dtype = trt.nptype(self.engine.get_tensor_dtype(binding))
             # logger.info(f"[allocate_buffers] tensor dtype: {dtype}")
             # if self.engine.binding_is_input(binding):
             if self.engine.get_tensor_dtype(binding):
-                # self.context.set_binding_shape(idx, shape)
-                self.context.set_input_shape(binding, shape)
+                self.context.set_binding_shape(idx, shape)
+                # self.context.set_input_shape(binding, shape)
             # logger.info(f"[allocate_buffers] shape: {shape}")
 
             tensor = torch.empty(tuple(shape), dtype=numpy_to_torch_dtype_dict[dtype]).to(device=device)
