@@ -23,24 +23,20 @@ from utils import utils
 # HEADER = {'Content-Type': 'application/json; charset=utf-8'}
 
 
-def infer(url, init_timeout_s, sequence, max_length, pooler):
+def infer(url, init_timeout_s, sequence, max_length, pooler, times):
+    times_list = []
+    result_list = []
     with ModelClient(url, "BERT", init_timeout_s=init_timeout_s) as client:
-        start = utils.get_cur_millisecond()
-        result_dict = client.infer_sample(sequence, max_length, pooler)
-        # embedding = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
-        # embedding = embedding.tolist()
-        # logger.info(f"[send_request] embedding: len: {len(embedding[0])}\n{embedding[0][:10]}; \n{embedding[0][-10:]}")
-        end = utils.get_cur_millisecond()
-    return end - start, 200
-
-# def infer(client, init_timeout_s, sequence, max_length, pooler):
-#     start = utils.get_cur_millisecond()
-#     result_dict = client.infer_sample(sequence, max_length, pooler)
-#     # embedding = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
-#     # embedding = embedding.tolist()
-#     # logger.info(f"[send_request] embedding: len: {len(embedding[0])}\n{embedding[0][:10]}; \n{embedding[0][-10:]}")
-#     end = utils.get_cur_millisecond()
-#     return end - start, 200
+        for i in range(times):
+            start = time.time() * 1000
+            result_dict = client.infer_sample(sequence, max_length, pooler)
+            # embedding = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
+            # embedding = embedding.tolist()
+            # logger.info(f"[send_request] embedding: len: {len(embedding[0])}\n{embedding[0][:10]}; \n{embedding[0][-10:]}")
+            end = time.time() * 1000
+            times_list.append(end-start)
+            result_list.append(200)
+    return times_list, result_list
 
 def start_threads(url, works, times, init_timeout_s, sequence, max_length, pooler):
     """
@@ -58,8 +54,8 @@ def start_threads(url, works, times, init_timeout_s, sequence, max_length, poole
     # start concurrent request
     start = utils.get_cur_millisecond()
 
-    for i in range(times): 
-        all_task.append(executor.submit(infer, url, init_timeout_s, sequence, max_length, pooler))
+    for i in range(works): 
+        all_task.append(executor.submit(infer, url, init_timeout_s, sequence, max_length, pooler, times))
 
     wait(all_task, return_when=ALL_COMPLETED)
     end = utils.get_cur_millisecond()
@@ -73,8 +69,8 @@ def start_threads(url, works, times, init_timeout_s, sequence, max_length, poole
     for task in as_completed(all_task):
         time, result = task.result()
         # logger.warning(f"[time] {time}, [result] {result}")
-        time_list.append(time)
-        result_list.append(result)
+        time_list += time
+        result_list += result
 
     return time_list, result_list, time_used, tps_request
 
