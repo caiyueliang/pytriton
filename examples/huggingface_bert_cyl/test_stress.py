@@ -6,19 +6,27 @@
    Date :           2020-09-11
 -------------------------------------------------
 """
-
+import sys
+import os
 import argparse
 import requests
 import json
-import utils
 import time
 import multiprocessing
 import numpy as np
 from loguru import logger
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED, as_completed
 from pytriton.client import ModelClient
-from utils import utils
 
+# 获取当前脚本的目录
+current_directory = os.path.dirname(os.path.abspath(__file__))
+# 获取上级目录
+parent_directory = os.path.dirname(current_directory)
+logger.warning(f"[parent_directory] {parent_directory}")
+# 将上级目录添加到系统路径
+sys.path.append(parent_directory)
+
+from utils import utils
 
 # HEADER = {'Content-Type': 'application/json; charset=utf-8'}
 
@@ -61,7 +69,7 @@ def start_threads(url, works, times, init_timeout_s, sequence, max_length, poole
     end = utils.get_cur_millisecond()
 
     time_used = (float(end - start)/1000)
-    tps_request = float(len(all_task)) / time_used
+    tps_request = float(len(all_task) * times) / time_used
 
     time_list = list()
     result_list = list()
@@ -100,8 +108,7 @@ def start_multiprocessing(url, processes, num_thread, times, init_timeout_s, seq
         total_time_p.extend(total_time_thread)
         total_result_p.extend(total_result_thread)
 
-    logger.warning("[统计] 总共耗时: %f s" % time_used_max)
-    logger.warning("[统计] 每秒处理请求个数: %f" % tps_request_total)
+    logger.warning(f"[统计] 总共耗时: {time_used_max} s; QPS: {tps_request_total}")
     utils.calc_time_p99(time_list=total_time_p)
     utils.calc_success_rate(result_list=total_result_p)
 
