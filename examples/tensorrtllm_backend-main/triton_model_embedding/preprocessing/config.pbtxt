@@ -1,0 +1,47 @@
+name: "preprocessing"
+backend: "python"
+max_batch_size: 8
+input [
+    {
+        name: "text"
+        data_type: TYPE_STRING
+        dims: [1]
+    },
+    {
+        name: "max_length"
+        data_type: TYPE_INT32
+        dims: [1]
+    }
+]
+output [
+    {
+        name: "input_ids"
+        data_type: TYPE_INT32
+        dims: [-1]
+    },
+    {
+        name: "input_lengths"
+        data_type: TYPE_INT32
+        dims: [-1]
+    },
+    {
+        name: "token_type_ids"
+        data_type: TYPE_INT32
+        dims: [-1]
+    }
+]
+
+parameters {
+  key: "tokenizer_dir"
+  value: {
+    string_value: "/mnt/publish-data/pretrain_models/taichu-risk-control-bert/bert-base-chinese"
+  }
+}
+
+
+instance_group [
+    {
+        count: 1
+        kind: KIND_CPU
+    }
+]
