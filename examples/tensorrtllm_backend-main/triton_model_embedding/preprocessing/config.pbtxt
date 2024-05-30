@@ -34,7 +34,7 @@ output [
 parameters {
   key: "tokenizer_dir"
   value: {
-    string_value: "/mnt/publish-data/pretrain_models/taichu-risk-control-bert/bert-base-chinese"
+    string_value: "/mnt/publish-data/pretrain_models/bert/bce-embedding-base_v1/"
   }
 }
 

@@ -75,8 +75,9 @@ class TritonPythonModel:
         """
         model_config = json.loads(args['model_config'])
         engine_dir = model_config['parameters']['engine_dir']['string_value']
-        serialize_path = "BertForSequenceClassification_float16_tp1_rank0.engine"
-        serialize_path = os.path.join(engine_dir, serialize_path)
+        # serialize_path = "BertForSequenceClassification_float16_tp1_rank0.engine"
+        # serialize_path = os.path.join(engine_dir, serialize_path)
+        serialize_path = engine_dir
         self.stream = torch.cuda.Stream()
         with open(serialize_path, 'rb') as f:
             engine_buffer = f.read()
@@ -133,15 +134,9 @@ class TritonPythonModel:
             inputs['token_type_ids'] = torch.from_numpy(pb_utils.get_input_tensor_by_name(
                 request, 'token_type_ids').as_numpy()).cuda()
 
-            # pb_utils.Logger.log_warn(
-            #             f"shape input_ids_tensor: {inputs['input_ids'].shape}"
-            #         )
-            # pb_utils.Logger.log_warn(
-            #             f"shape input_lengths: {inputs['input_lengths'].shape}"
-            #         )
-            # pb_utils.Logger.log_warn(
-            #             f"shape token_type_ids: {inputs['token_type_ids'].shape}"
-            #         )
+            # pb_utils.Logger.log_warn(f"shape input_ids_tensor: {inputs['input_ids'].shape}")
+            # pb_utils.Logger.log_warn(f"shape input_lengths: {inputs['input_lengths'].shape}")
+            # pb_utils.Logger.log_warn(f"shape token_type_ids: {inputs['token_type_ids'].shape}")
             # Broadcast requests to other clients
             # inputs = self.comm.bcast(inputs, root=0)
             output_info = self.session.infer_shapes([
@@ -162,28 +157,37 @@ class TritonPythonModel:
                 raise RuntimeError("TRT-LLM Runtime execution failed")
             torch.cuda.Stream.synchronize(self.stream)
 
-            logits = outputs['logits']
-            pred_logist = logits.detach().cpu()
-            # pb_utils.Logger.log_warn(
-            #             f"outputs type : {type(outputs['logits'])}"
-            #         )
-            # pb_utils.Logger.log_warn(
-            #             f"logits: {logits}"
-            #         )
-            probs = torch.softmax(pred_logist, dim=1)
-            max_prob, predicted_index = torch.max(probs, dim=1)
-            # score = max_prob.item()
-            # label = predicted_index.item()
-            score = max_prob.numpy().astype(np.float32)
-            label = predicted_index.numpy()
+            # if pooler == "cls":
+            #     embeddings = outputs["hidden_states"][:, 0]
+            # elif pooler == "mean":
+            #     attention_mask = inputs['attention_mask'].to(device)
+            #     last_hidden = outputs["hidden_states"]
+            #     embeddings = (last_hidden * attention_mask.unsqueeze(-1).float()).sum(1) / attention_mask.sum(-1).unsqueeze(-1)
+            # else:
+            #     raise NotImplementedError
+            embeddings = outputs["hidden_states"][:, 0]
+            embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
+            embeddings = embeddings.cpu().detach().numpy().tobytes()
+            embeddings = np.array([[embeddings]], dtype=np.bytes_)
+            pb_utils.Logger.log_warn(f"[execute] embeddings: {embeddings}")
+
+            # logits = outputs['logits']
+            # pred_logist = logits.detach().cpu()
+            # # pb_utils.Logger.log_warn(f"outputs type : {type(outputs['logits'])}")
+            # # pb_utils.Logger.log_warn(f"logits: {logits}")
+            # probs = torch.softmax(pred_logist, dim=1)
+            # max_prob, predicted_index = torch.max(probs, dim=1)
+            # # score = max_prob.item()
+            # # label = predicted_index.item()
+            # score = max_prob.numpy().astype(np.float32)
+            # label = predicted_index.numpy()
 
             inference_response = pb_utils.InferenceResponse(
                 output_tensors = [
-                    pb_utils.Tensor("score", score),
-                    pb_utils.Tensor("label", label),
+                    pb_utils.Tensor("embedding", embeddings),
+                    # pb_utils.Tensor("label", 1),
                 ]
             )
-
 
             responses.append(inference_response)
 

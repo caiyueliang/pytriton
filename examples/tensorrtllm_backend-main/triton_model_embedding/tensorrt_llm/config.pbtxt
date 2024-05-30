@@ -22,14 +22,9 @@ input [
 
 output [
     {
-        name: "label"
-        data_type: TYPE_INT32
-        dims: [1]
-    },
-    {
-        name: "score"
-        data_type: TYPE_FP32
-        dims: [1]
+        name: "embedding"
+        data_type: TYPE_STRING
+        dims: [-1]
     }
 ]
 
@@ -49,6 +44,6 @@ instance_group [
 parameters {
     key: "engine_dir"
     value: {
-        string_value: "/mnt/yangsheng/trtion_trtllm/trt-llm-fp16"
+        string_value: "/data/caiyueliang/tensorrt-llm/examples/bert/bce-embedding-trt-llm-fp16-test/RobertaModel_float16_tp1_rank0.engine"
     }
 }

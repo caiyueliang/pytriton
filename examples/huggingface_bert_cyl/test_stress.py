@@ -30,11 +30,10 @@ from utils import utils
 
 # HEADER = {'Content-Type': 'application/json; charset=utf-8'}
 
-
-def infer(url, init_timeout_s, sequence, max_length, pooler, times):
+def infer(url, model_name, init_timeout_s, sequence, max_length, pooler, times):
     times_list = []
     result_list = []
-    with ModelClient(url, "BERT", init_timeout_s=init_timeout_s) as client:
+    with ModelClient(url, model_name, init_timeout_s=init_timeout_s) as client:
         for i in range(times):
             start = time.time() * 1000
             result_dict = client.infer_sample(sequence, max_length, pooler)
@@ -46,7 +45,7 @@ def infer(url, init_timeout_s, sequence, max_length, pooler, times):
             result_list.append(200)
     return times_list, result_list
 
-def start_threads(url, works, times, init_timeout_s, sequence, max_length, pooler):
+def start_threads(url, model_name, works, times, init_timeout_s, sequence, max_length, pooler):
     """
     concurrency test start
     :param func:
@@ -63,7 +62,7 @@ def start_threads(url, works, times, init_timeout_s, sequence, max_length, poole
     start = utils.get_cur_millisecond()
 
     for i in range(works): 
-        all_task.append(executor.submit(infer, url, init_timeout_s, sequence, max_length, pooler, times))
+        all_task.append(executor.submit(infer, url, model_name, init_timeout_s, sequence, max_length, pooler, times))
 
     wait(all_task, return_when=ALL_COMPLETED)
     end = utils.get_cur_millisecond()
@@ -83,12 +82,12 @@ def start_threads(url, works, times, init_timeout_s, sequence, max_length, poole
     return time_list, result_list, time_used, tps_request
 
 
-def start_multiprocessing(url, processes, num_thread, times, init_timeout_s, sequence, max_length, pooler):
+def start_multiprocessing(url, model_name, processes, num_thread, times, init_timeout_s, sequence, max_length, pooler):
     pool = multiprocessing.Pool(processes=processes)
     all_p = list()
 
     for i in range(processes):
-        all_p.append(pool.apply_async(start_threads, (url, num_thread, times, init_timeout_s, sequence, max_length, pooler)))
+        all_p.append(pool.apply_async(start_threads, (url, model_name, num_thread, times, init_timeout_s, sequence, max_length, pooler)))
 
     logger.info("[start_multiprocessing] start ...")
     pool.close()
@@ -126,6 +125,8 @@ def parse_argvs():
             "Url to Triton server (ex. grpc://localhost:8001)."
             "HTTP protocol with default port is used if parameter is not provided"
         ), required=False)
+    
+    parser.add_argument("--model_name", type=str, default="BERT", required=False)
     parser.add_argument("--init-timeout-s", type=float, default=600.0, help="Server and model ready state timeout in seconds", required=False)
     parser.add_argument("--text", type=str, default="我是中国人", required=False)
     parser.add_argument("--use_trt", type=bool, default=False, required=False)
@@ -153,6 +154,7 @@ if __name__ == '__main__':
     logger.info("Sending request")
 
     start_multiprocessing(url=args.url, 
+                          model_name=args.model_name,
                           processes=args.processes, 
                           num_thread=args.num_thread,
                           times=args.times, 

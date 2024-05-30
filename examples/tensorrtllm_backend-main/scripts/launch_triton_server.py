@@ -60,7 +60,6 @@ def parse_arguments():
         'Name(s) of the tensorrt_llm Triton model in the repo. Use comma to separate if multiple model names',
         default='tensorrt_llm',
     )
-
     parser.add_argument(
         '--multi-model',
         action='store_true',
@@ -113,5 +112,5 @@ if __name__ == '__main__':
         env['TRTLLM_ORCHESTRATOR'] = '1'
 
     print(f"[cmd] {cmd}")
-    print(f"[env] {env}")
+    # print(f"[env] {env}")
     subprocess.Popen(cmd, env=env)

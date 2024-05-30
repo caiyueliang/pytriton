@@ -26,7 +26,7 @@ from pytriton.client import ModelClient
 
 def infer(url, init_timeout_s, times, sequence, max_length, pooler, use_trt, result_queue):
     times_list = []
-    with ModelClient(url, "BERT", init_timeout_s=init_timeout_s) as client:
+    with ModelClient(url, "ensemble", init_timeout_s=init_timeout_s) as client:
         for i in range(times):
             start = time.time() * 1000
             result_dict = client.infer_sample(sequence, max_length, pooler)

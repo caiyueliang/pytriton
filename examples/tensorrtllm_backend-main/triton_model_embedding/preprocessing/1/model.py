@@ -3,9 +3,9 @@ from typing import List
 
 import numpy as np
 import torch
+from transformers import AutoModel, AutoTokenizer
 import triton_python_backend_utils as pb_utils
-from transformers import BertTokenizer
-
+# from transformers import BertTokenizer
 
 class TritonPythonModel:
     """Your Python model must use the same class name. Every Python model
@@ -30,12 +30,11 @@ class TritonPythonModel:
         # Parse model configs
         # model_config = json.loads(args['model_config'])
         model_config = json.loads(args['model_config'])
-        # tokenizer_dir = model_config['parameters']['tokenizer_dir'][
-        #     'string_value']
-        tokenizer_dir = "/mnt/publish-data/pretrain_models/taichu-risk-control-bert/bert-base-chinese"
+        tokenizer_dir = model_config['parameters']['tokenizer_dir']['string_value']
+        # tokenizer_dir = "/mnt/publish-data/pretrain_models/taichu-risk-control-bert/bert-base-chinese"
+        pb_utils.Logger.log_warn(f"[tokenizer_dir] {tokenizer_dir}")
 
-        self.tokenizer = BertTokenizer.from_pretrained(tokenizer_dir,
-                                                       trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir, trust_remote_code=True)
 
         # Parse model output configs and convert Triton types to numpy types
         output_names = [
@@ -80,40 +79,30 @@ class TritonPythonModel:
 
         responses = []
 
+        pb_utils.Logger.log_warn(f"[execute] requests: {requests}")
         # Every Python backend must iterate over everyone of the requests
         # and create a pb_utils.InferenceResponse for each of them.
         for idx, request in enumerate(requests):
             # Get input tensors
-            # text = pb_utils.get_input_tensor_by_name(request,
-            #                                           'text').as_numpy()
-            text = pb_utils.get_input_tensor_by_name(request,
-                                                      'text').as_numpy()
+            # text = pb_utils.get_input_tensor_by_name(request, 'text').as_numpy()
+            text = pb_utils.get_input_tensor_by_name(request, 'text').as_numpy()
             text = text[0][0].decode("utf-8")
-            # pb_utils.Logger.log_warn(
-            #             f"text: {text}"
-            #         )
-            # pb_utils.Logger.log_warn(
-            #             f"type text: {type(text[0][0])}"
-            #         )
+            # pb_utils.Logger.log_warn(f"text: {text}")
+            # pb_utils.Logger.log_warn(f"type text: {type(text[0][0])}")
             
-            max_length = pb_utils.get_input_tensor_by_name(
-                request, 'max_length').as_numpy()
+            max_length = pb_utils.get_input_tensor_by_name(request, 'max_length').as_numpy()
+            max_length = max_length[0][0]
+            pb_utils.Logger.log_warn(f"[execute] text: {text}; max_length: {max_length}")
 
             model_input = self.tokenizer(text, truncation=True, padding=True, \
                                          return_tensors="pt", max_length=max_length)
             trt_input_ids = model_input.input_ids.int().numpy()
-            trt_token_type_ids = model_input.token_type_ids.int().numpy()
+            trt_token_type_ids = model_input.attention_mask.int().numpy()
             trt_input_lengths = model_input.attention_mask.sum(dim=1).unsqueeze(0).int().numpy()
 
-            pb_utils.Logger.log_warn(
-                        f"shape input_ids_tensor: {trt_input_ids.shape}"
-                    )
-            pb_utils.Logger.log_warn(
-                        f"shape token_type_ids_tensor: {trt_token_type_ids.shape}"
-                    )
-            pb_utils.Logger.log_warn(
-                        f"shape input_lengths_tensor: {trt_input_lengths.shape}"
-                    )
+            pb_utils.Logger.log_warn(f"shape input_ids_tensor: {trt_input_ids.shape}")
+            pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids.shape}")
+            pb_utils.Logger.log_warn(f"shape input_lengths_tensor: {trt_input_lengths.shape}")
 
             # Create output tensors. You need pb_utils.Tensor
             # objects to create pb_utils.InferenceResponse.
