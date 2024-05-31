@@ -137,6 +137,8 @@ class TritonPythonModel:
 
             text_batch.append(text)
 
+        pb_utils.Logger.log_warn(f"text len: {len(text)}; max_length: {max_length}; text_batch: {text_batch}")
+
         # pb_utils.Logger.log_warn(f"text_batch len: {len(requests)}")
 
         model_input = self.tokenizer(text_batch, truncation=True, padding=True, return_tensors="pt", max_length=max_length)
@@ -180,22 +182,16 @@ class TritonPythonModel:
         #     raise NotImplementedError
         embeddings = outputs["hidden_states"][:, 0]
         embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
-        # pb_utils.Logger.log_warn(f"[execute] 111 embeddings: {embeddings.size()}")
 
+        embeddings = embeddings.cpu().detach().numpy()
         for idx, embedding in enumerate(embeddings):
-            embedding = embedding.cpu().detach().numpy().tobytes()
-            # pb_utils.Logger.log_warn(f"[execute] 222 embedding: {len(embedding)}")
+            embedding = embedding.tobytes()
             embedding = np.array([[embedding]], dtype=np.bytes_)
-            # pb_utils.Logger.log_warn(f"[execute] 333 embedding: {embedding.shape}")
-
             inference_response = pb_utils.InferenceResponse(
-                output_tensors = [
-                    pb_utils.Tensor("embedding", embedding),
-                ]
+                output_tensors = [pb_utils.Tensor("embedding", embedding)]
             )
-
             responses.append(inference_response)
-
+        
         # You must return a list of pb_utils.InferenceResponse. Length
         # of this list must match the length of `requests` list.
         return responses
