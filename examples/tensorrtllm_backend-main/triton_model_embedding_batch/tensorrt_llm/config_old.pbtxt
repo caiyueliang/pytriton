@@ -30,7 +30,7 @@ output [
 
 dynamic_batching {
     preferred_batch_size: [ 1, 4, 8 ],
-    max_queue_delay_microseconds: 1000   # 等待时间
+    max_queue_delay_microseconds: 5000   # 等待时间
 }
 
 instance_group [
