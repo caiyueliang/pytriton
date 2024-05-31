@@ -1,22 +1,17 @@
-name: "tensorrt_llm"
+name: "bert"
 backend: "python"
 max_batch_size: 8
 
 input [
     {
-        name: "input_ids"
-        data_type: TYPE_INT32
+        name: "text"
+        data_type: TYPE_STRING
         dims: [-1]
     },
     {
-        name: "input_lengths"
+        name: "max_length"
         data_type: TYPE_INT32
-        dims: [-1]
-    },
-    {
-        name: "token_type_ids"
-        data_type: TYPE_INT32
-        dims: [-1]
+        dims: [1]
     }
 ]
 
@@ -41,6 +36,12 @@ instance_group [
     }
 ]
 
+parameters {
+  key: "tokenizer_dir"
+  value: {
+    string_value: "/mnt/publish-data/pretrain_models/bert/bce-embedding-base_v1/"
+  }
+}
 parameters {
     key: "engine_dir"
     value: {

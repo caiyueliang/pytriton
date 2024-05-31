@@ -4,6 +4,7 @@ import torch
 import numpy as np
 import triton_python_backend_utils as pb_utils
 from torch import from_numpy
+from transformers import AutoModel, AutoTokenizer
 
 import tensorrt as trt
 from tensorrt_llm.runtime import ModelRunner, SamplingConfig
@@ -74,15 +75,18 @@ class TritonPythonModel:
           * model_name: Model name
         """
         model_config = json.loads(args['model_config'])
+
+        tokenizer_dir = model_config['parameters']['tokenizer_dir']['string_value']
+        pb_utils.Logger.log_warn(f"[tokenizer_dir] {tokenizer_dir}")
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir, trust_remote_code=True)
+
         engine_dir = model_config['parameters']['engine_dir']['string_value']
-        # serialize_path = "BertForSequenceClassification_float16_tp1_rank0.engine"
-        # serialize_path = os.path.join(engine_dir, serialize_path)
-        serialize_path = engine_dir
+        model_path = engine_dir
+        pb_utils.Logger.log_warn(f"[model_path] {model_path}")
         self.stream = torch.cuda.Stream()
-        with open(serialize_path, 'rb') as f:
+        with open(model_path, 'rb') as f:
             engine_buffer = f.read()
         self.session = Session.from_serialized_engine(engine_buffer)
-
 
         # self.comm = mpi_comm()
         # self.rank = mpi_rank()
@@ -117,10 +121,54 @@ class TritonPythonModel:
         # as they will be overridden in subsequent inference requests. You can
         # make a copy of the underlying NumPy array and store it if it is
         # required.
-        pb_utils.Logger.log_warn(f"[trt_execute] requests len: {len(requests)}")
-        for request in requests:
+        for idx, request in enumerate(requests):
+            # Get input tensors
+            # text = pb_utils.get_input_tensor_by_name(request, 'text').as_numpy()
+            text = pb_utils.get_input_tensor_by_name(request, 'text').as_numpy()
+            # pb_utils.Logger.log_warn(f"idx: {idx}, text: {text}, type: {type(text)}")
+            text = text[0][0].decode("utf-8")
+            # pb_utils.Logger.log_warn(f"text: {text}")
+            # pb_utils.Logger.log_warn(f"type text: {type(text[0][0])}")
+            
+            max_length = pb_utils.get_input_tensor_by_name(request, 'max_length').as_numpy()
+            max_length = max_length[0][0]
+            # pb_utils.Logger.log_warn(f"[execute] text: {text}; max_length: {max_length}")
+
+            model_input = self.tokenizer(text, truncation=True, padding=True, return_tensors="pt", max_length=max_length)
+            # model_input = self.tokenizer(text, truncation=True, padding="max_length", return_tensors="pt", max_length=max_length)
+            # pb_utils.Logger.log_warn(f"[model_input] {model_input}")
+
+            trt_input_ids = model_input.input_ids.int().cuda()
+            trt_token_type_ids = model_input.attention_mask.int().cuda()
+            trt_input_lengths = model_input.attention_mask.sum(dim=1).unsqueeze(0).int().cuda()
+
+            inputs = {
+                'input_ids': trt_input_ids,
+                'token_type_ids': trt_token_type_ids,
+                'input_lengths': trt_input_lengths
+            }
+            # pb_utils.Logger.log_warn(f"shape input_ids_tensor: {trt_input_ids.shape}")
+            # pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids.shape}")
+            # pb_utils.Logger.log_warn(f"shape input_lengths_tensor: {trt_input_lengths.shape}")
+
+            # Create output tensors. You need pb_utils.Tensor
+            # objects to create pb_utils.InferenceResponse.
+            # input_ids_tensor = pb_utils.Tensor(
+            #     'input_ids', trt_input_ids.astype(self.input_ids_dtype))
+            # input_lengths_tensor = pb_utils.Tensor(
+            #     'input_lengths', trt_input_lengths.astype(self.input_lengths_dtype))
+            # token_type_ids_tensor = pb_utils.Tensor(
+            #     'token_type_ids', trt_token_type_ids.astype(self.token_type_ids_dtype))
+
+            # inference_response = pb_utils.InferenceResponse(output_tensors=[
+            #     input_ids_tensor, input_lengths_tensor, token_type_ids_tensor
+            # ])
+            # responses.append(inference_response)
+
+        # pb_utils.Logger.log_warn(f"[trt_execute] requests len: {len(requests)}")
+        # for request in requests:
             # Perform inference on the request and append it to responses list...
-            inputs = {}
+            # inputs = {}
             # if self.rank == 0:
             # inputs['input_ids'] = torch.from_numpy(get_input_tensor_by_name(
             #     request, 'input_ids')).cuda()
@@ -128,12 +176,12 @@ class TritonPythonModel:
             #     request, 'input_lengths')).cuda()
             # inputs['token_type_ids'] = torch.from_numpy(get_input_scalar_by_name(
             #     request, 'token_type_ids')).cuda()
-            inputs['input_ids'] = torch.from_numpy(pb_utils.get_input_tensor_by_name(
-                request, 'input_ids').as_numpy()).cuda()
-            inputs['input_lengths'] = torch.from_numpy(pb_utils.get_input_tensor_by_name(
-                request, 'input_lengths').as_numpy()).cuda()
-            inputs['token_type_ids'] = torch.from_numpy(pb_utils.get_input_tensor_by_name(
-                request, 'token_type_ids').as_numpy()).cuda()
+            # inputs['input_ids'] = torch.from_numpy(pb_utils.get_input_tensor_by_name(
+            #     request, 'input_ids').as_numpy()).cuda()
+            # inputs['input_lengths'] = torch.from_numpy(pb_utils.get_input_tensor_by_name(
+            #     request, 'input_lengths').as_numpy()).cuda()
+            # inputs['token_type_ids'] = torch.from_numpy(pb_utils.get_input_tensor_by_name(
+            #     request, 'token_type_ids').as_numpy()).cuda()
 
             # pb_utils.Logger.log_warn(f"shape input_ids_tensor: {inputs['input_ids'].shape}")
             # pb_utils.Logger.log_warn(f"shape input_lengths: {inputs['input_lengths'].shape}")
@@ -142,10 +190,8 @@ class TritonPythonModel:
             # inputs = self.comm.bcast(inputs, root=0)
             output_info = self.session.infer_shapes([
                 TensorInfo('input_ids', trt.DataType.INT32, inputs['input_ids'].shape),
-                TensorInfo('input_lengths', trt.DataType.INT32,
-                            inputs['input_lengths'].squeeze(0).shape),
-                TensorInfo('token_type_ids', trt.DataType.INT32,
-                            inputs['token_type_ids'].shape),
+                TensorInfo('input_lengths', trt.DataType.INT32, inputs['input_lengths'].squeeze(0).shape),
+                TensorInfo('token_type_ids', trt.DataType.INT32, inputs['token_type_ids'].shape),
             ])
             outputs = {
                 t.name: torch.empty(tuple(t.shape),
