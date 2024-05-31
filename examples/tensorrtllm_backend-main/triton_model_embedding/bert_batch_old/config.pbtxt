@@ -1,4 +1,4 @@
-name: "bert_batch"
+name: "bert_batch_old"
 backend: "python"
 max_batch_size: 8
 
