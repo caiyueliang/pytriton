@@ -40,6 +40,7 @@ def infer(url, model_name, init_timeout_s, sequence, max_length, pooler, times):
             # embedding = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
             # embedding = embedding.tolist()
             # logger.info(f"[send_request] embedding: len: {len(embedding[0])}\n{embedding[0][:10]}; \n{embedding[0][-10:]}")
+
             end = time.time() * 1000
             times_list.append(end-start)
             result_list.append(200)
