@@ -125,13 +125,14 @@ class TritonPythonModel:
         """
         responses = []
         text_batch = []
-        text_len_per_req = []
+        group_list = []
         # Every Python backend must iterate through list of requests and create
         # an instance of pb_utils.InferenceResponse class for each of them. You
         # should avoid storing any of the input Tensors in the class attributes
         # as they will be overridden in subsequent inference requests. You can
         # make a copy of the underlying NumPy array and store it if it is
         # required.
+
         # pb_utils.Logger.log_warn(f"requests len: {len(requests)}")
         for idx, request in enumerate(requests):
             max_length = pb_utils.get_input_tensor_by_name(request, 'max_length').as_numpy()
@@ -141,15 +142,15 @@ class TritonPythonModel:
             # Get input tensors
             text_per_req = pb_utils.get_input_tensor_by_name(request, 'text').as_numpy()
             text_len_req = len(text_per_req[0])
-            pb_utils.Logger.log_warn(f"idx: {idx}, text: {text_per_req}, type: {type(text_per_req)}, len: {text_len_req}")
-            text_len_per_req.append(text_len_req)
+            # pb_utils.Logger.log_warn(f"idx: {idx}, text: {text_per_req}, type: {type(text_per_req)}, len: {text_len_req}")
+            group_list.append(text_len_req)
 
             for text_bytes in text_per_req[0]:
                 text = text_bytes.decode("utf-8")
-                pb_utils.Logger.log_warn(f"text: {text}")
+                # pb_utils.Logger.log_warn(f"text: {text}")
                 text_batch.append(text)
 
-        pb_utils.Logger.log_warn(f"text_len_per_req: {text_len_per_req}; text len: {len(text_batch)}; max_length: {max_length}; text_batch: {text_batch}; ")
+        pb_utils.Logger.log_warn(f"group_list: {group_list}; text len: {len(text_batch)}; max_length: {max_length}; text_batch: {text_batch}; ")
 
         # pb_utils.Logger.log_warn(f"text_batch len: {len(requests)}")
 
@@ -196,12 +197,12 @@ class TritonPythonModel:
         embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
 
         embeddings = embeddings.cpu().detach().numpy()
-        pb_utils.Logger.log_warn(f"embeddings: {type(embeddings)}, {embeddings}")
+        # pb_utils.Logger.log_warn(f"embeddings: {type(embeddings)}, {embeddings}")
 
-        embeddings_g = embeddings_group(embeddings=embeddings, group_sizes=text_len_per_req)
-        pb_utils.Logger.log_warn(f"embeddings_g: {embeddings_g}")
+        embeddings_g = embeddings_group(embeddings=embeddings, group_sizes=group_list)
+        # pb_utils.Logger.log_warn(f"embeddings_g: {embeddings_g}")
         for embedding in embeddings_g:
-            pb_utils.Logger.log_warn(f"embedding 1111: {embedding}")
+            # pb_utils.Logger.log_warn(f"embedding 1111: {embedding}")
             embedding = embedding.tobytes()
             embedding = np.array([[embedding]], dtype=np.bytes_)
             inference_response = pb_utils.InferenceResponse(

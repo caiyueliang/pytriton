@@ -41,7 +41,7 @@ parameters {
 
 instance_group [
     {
-        count: 4
+        count: 1
         kind: KIND_CPU
     }
 ]
