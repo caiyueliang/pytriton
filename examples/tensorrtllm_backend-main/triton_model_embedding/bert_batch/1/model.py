@@ -53,11 +53,11 @@ def trt_dtype_to_torch(dtype):
         raise TypeError("%s is not supported" % dtype)
 
 
-def embeddings_group(embeddings, group_sizes):
+def tensor_split(tensor, group_sizes):
     groups = []
     start_index = 0
     for size in group_sizes:
-        group = embeddings[start_index: start_index + size]
+        group = tensor[start_index: start_index + size]
         groups.append(group)
         start_index += size
     return groups
@@ -125,6 +125,8 @@ class TritonPythonModel:
         """
         responses = []
         text_batch = []
+        max_len_list = []
+        pooler_list = []
         group_list = []
         # Every Python backend must iterate through list of requests and create
         # an instance of pb_utils.InferenceResponse class for each of them. You
@@ -135,9 +137,10 @@ class TritonPythonModel:
 
         # pb_utils.Logger.log_warn(f"requests len: {len(requests)}")
         for idx, request in enumerate(requests):
-            max_length = pb_utils.get_input_tensor_by_name(request, 'max_length').as_numpy()
-            max_length = max_length[0][0]
+            max_len_list.append(pb_utils.get_input_tensor_by_name(request, 'max_length').as_numpy()[0][0])
+            # max_length = max_length[0][0]
             # pb_utils.Logger.log_warn(f"[execute] text: {text}; max_length: {max_length}")
+            pooler_list.append(pb_utils.get_input_tensor_by_name(request, 'pooler').as_numpy()[0][0].decode("utf-8"))
 
             # Get input tensors
             text_per_req = pb_utils.get_input_tensor_by_name(request, 'text').as_numpy()
@@ -147,10 +150,12 @@ class TritonPythonModel:
 
             for text_bytes in text_per_req[0]:
                 text = text_bytes.decode("utf-8")
-                # pb_utils.Logger.log_warn(f"text: {text}")
                 text_batch.append(text)
 
+        max_length = max(max_len_list)
+        max_length = 512 if max_length > 512 else max_length
         pb_utils.Logger.log_warn(f"group_list: {group_list}; text len: {len(text_batch)}; max_length: {max_length}; text_batch: {text_batch}; ")
+        pb_utils.Logger.log_warn(f"pooler_list: {pooler_list}")
 
         # pb_utils.Logger.log_warn(f"text_batch len: {len(requests)}")
 
@@ -168,7 +173,7 @@ class TritonPythonModel:
             'input_lengths': trt_input_lengths
         }
         # pb_utils.Logger.log_warn(f"shape input_ids_tensor: {trt_input_ids.shape}")
-        # pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids.shape}")
+        pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids.shape}")
         # pb_utils.Logger.log_warn(f"shape input_lengths_tensor: {trt_input_lengths.shape}")
 
         output_info = self.session.infer_shapes([
@@ -185,28 +190,30 @@ class TritonPythonModel:
             raise RuntimeError("TRT-LLM Runtime execution failed")
         torch.cuda.Stream.synchronize(self.stream)
 
-        # if pooler == "cls":
-        #     embeddings = outputs["hidden_states"][:, 0]
-        # elif pooler == "mean":
-        #     attention_mask = inputs['attention_mask'].to(device)
-        #     last_hidden = outputs["hidden_states"]
-        #     embeddings = (last_hidden * attention_mask.unsqueeze(-1).float()).sum(1) / attention_mask.sum(-1).unsqueeze(-1)
-        # else:
-        #     raise NotImplementedError
-        embeddings = outputs["hidden_states"][:, 0]
-        embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
+        hidden_states = outputs["hidden_states"]
+        # pb_utils.Logger.log_warn(f"hidden_states: {hidden_states.size()}")
 
-        embeddings = embeddings.cpu().detach().numpy()
-        # pb_utils.Logger.log_warn(f"embeddings: {type(embeddings)}, {embeddings}")
+        hidden_states_list = tensor_split(tensor=hidden_states, group_sizes=group_list)
+        attention_mask_list = tensor_split(tensor=trt_token_type_ids, group_sizes=group_list)
+        # pb_utils.Logger.log_warn(f"hidden_states_list: {len(hidden_states_list)}; {hidden_states_list}")
+        # pb_utils.Logger.log_warn(f"attention_mask_list: {len(attention_mask_list)}; {attention_mask_list}")
 
-        embeddings_g = embeddings_group(embeddings=embeddings, group_sizes=group_list)
-        # pb_utils.Logger.log_warn(f"embeddings_g: {embeddings_g}")
-        for embedding in embeddings_g:
-            # pb_utils.Logger.log_warn(f"embedding 1111: {embedding}")
-            embedding = embedding.tobytes()
-            embedding = np.array([[embedding]], dtype=np.bytes_)
+        for idx, hidden_states in enumerate(hidden_states_list):
+            if pooler_list[idx] == "cls":
+                embeddings = hidden_states[:, 0]
+            elif pooler_list[idx] == "mean":
+                # attention_mask = inputs_on_device['attention_mask']
+                attention_mask = attention_mask_list[idx]
+                embeddings = (hidden_states * attention_mask.unsqueeze(-1).float()).sum(1) / attention_mask.sum(-1).unsqueeze(-1)
+            else:
+                embeddings = hidden_states[:, 0]
+
+            embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
+            embeddings = embeddings.cpu().detach().numpy()
+            embeddings = embeddings.tobytes()
+            embeddings = np.array([[embeddings]], dtype=np.bytes_)
             inference_response = pb_utils.InferenceResponse(
-                output_tensors = [pb_utils.Tensor("embedding", embedding)]
+                output_tensors = [pb_utils.Tensor("embedding", embeddings)]
             )
             responses.append(inference_response)
         

@@ -37,11 +37,11 @@ def infer(url, model_name, init_timeout_s, sequence, max_length, pooler, times):
         for i in range(times):
             start = time.time() * 1000
             result_dict = client.infer_sample(sequence, max_length, pooler)
-            # # logger.warning(f"[infer] {result_dict['embedding']}")
-            # embeddings = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
-            # embeddings = embeddings.tolist()
-            # for embed in embeddings:
-            #     logger.info(f"[send_request] embedding: len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
+            # logger.warning(f"[infer] {result_dict['embedding']}")
+            embeddings = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
+            embeddings = embeddings.tolist()
+            for embed in embeddings:
+                logger.info(f"[send_request] embedding: len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
 
             end = time.time() * 1000
             times_list.append(end-start)
@@ -137,6 +137,7 @@ def parse_argvs():
     parser.add_argument("--processes", help="processes num", type=int, default=1)
     parser.add_argument("--num_thread", type=int, default=1, help="Number of requests per client.", required=False)
     parser.add_argument("--times", help="test times per processes", type=int, default=10)
+    parser.add_argument("--pooler", help="pooler", type=str, default="cls")
     args = parser.parse_args()
 
     args = parser.parse_args()
@@ -153,7 +154,7 @@ if __name__ == '__main__':
     # sequence = np.array([args.text.encode('utf-8'), "你好，介绍一下你自己".encode('utf-8')])
     # sequence = np.array([args.text.encode('utf-8'), "你好，介绍一下你自己".encode('utf-8'), "hello, world".encode('utf-8'), "危险车辆怎么过渡？".encode('utf-8')])
     max_length = np.array([512], dtype=np.int32)
-    pooler = np.array([b"cls"])
+    pooler = np.array([args.pooler.encode('utf-8')])
 
     logger.info(f"Input: {sequence}")
     logger.info("Sending request")

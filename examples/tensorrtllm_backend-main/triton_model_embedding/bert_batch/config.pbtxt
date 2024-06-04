@@ -12,6 +12,11 @@ input [
         name: "max_length"
         data_type: TYPE_INT32
         dims: [1]
+    },
+    {
+        name: "pooler"
+        data_type: TYPE_STRING
+        dims: [1]
     }
 ]
 
