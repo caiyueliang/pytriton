@@ -155,7 +155,7 @@ class TritonPythonModel:
         max_length = max(max_len_list)
         max_length = 512 if max_length > 512 else max_length
         pb_utils.Logger.log_warn(f"group_list: {group_list}; text len: {len(text_batch)}; max_length: {max_length}; text_batch: {text_batch}; ")
-        pb_utils.Logger.log_warn(f"pooler_list: {pooler_list}")
+        # pb_utils.Logger.log_warn(f"pooler_list: {pooler_list}")
 
         # pb_utils.Logger.log_warn(f"text_batch len: {len(requests)}")
 
@@ -173,7 +173,7 @@ class TritonPythonModel:
             'input_lengths': trt_input_lengths
         }
         # pb_utils.Logger.log_warn(f"shape input_ids_tensor: {trt_input_ids.shape}")
-        pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids.shape}")
+        # pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids.shape}")
         # pb_utils.Logger.log_warn(f"shape input_lengths_tensor: {trt_input_lengths.shape}")
 
         output_info = self.session.infer_shapes([
