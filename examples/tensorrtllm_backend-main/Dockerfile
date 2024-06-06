@@ -1,10 +1,14 @@
-FROM swr.cn-central-221.ovaijisuan.com/wair/pytriton:base_py39_torch2.3
+FROM swr.cn-central-221.ovaijisuan.com/wair/tritonserver:24.04-trtllm
 
-COPY huggingface_bert_cyl /home/server/huggingface_bert_cyl
+USER root
 
-WORKDIR /home/server/huggingface_bert_cyl
+# COPY ./bce_all_gpu/requirements.txt /tmp/requirements.txt
 
-ENV LD_LIBRARY_PATH=/usr/local/python3.9.10/lib:$LD_LIBRARY_PATH
+# RUN pip3 install pip -U -i https://pypi.tuna.tsinghua.edu.cn/simple/ \
+#     && pip3 install -r /tmp/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
 
-CMD ["python", "server_embed.py"]
+WORKDIR /home/server
 
+COPY . .
+
+CMD ["bash", "scripts/run_server.sh"]
