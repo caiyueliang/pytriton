@@ -28,31 +28,42 @@ sys.path.append(parent_directory)
 
 from utils import utils
 
-# HEADER = {'Content-Type': 'application/json; charset=utf-8'}
+headers = {'Content-Type': 'application/json', 'authorization': 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhZG1pbiJ9.j6-hUMaFYdSIzfc6i6TJ5DaS96Z9I78SrjxAOg-71yE'}
 
-def infer(url, model_name, init_timeout_s, sequence, max_length, pooler, times):
+def print_embedding(result_dict, compress=False):
+    if compress is True:
+        embeddings = np.frombuffer(result_dict['embedding'], dtype=np.float16).reshape(-1, 768)
+        embeddings = embeddings.tolist()
+        for embed in embeddings:
+            logger.info(f"[embedding] len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
+    else:
+        embeddings = np.array(result_dict['embedding'], dtype=np.float32).reshape(-1, 768)
+        for embed in embeddings:
+            logger.info(f"[embedding] len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
+
+def infer(url, model_name, params, times):
     times_list = []
     result_list = []
-    with ModelClient(url, model_name, init_timeout_s=init_timeout_s) as client:
-        for i in range(times):
+    for i in range(times):
+        try:
             start = time.time() * 1000
-            result_dict = client.infer_sample(sequence, max_length, pooler)
-            # ==========================================================================================
-            # 未压缩
-            # logger.info(f"[infer] {result_dict['embedding'][0][0]}")
-            # ==========================================================================================
-            # 压缩
-            # embeddings = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
-            # embeddings = embeddings.tolist()
-            # for embed in embeddings:
-            #     logger.info(f"[send_request] embedding: len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
+            response = requests.post(url, headers=headers, data=json.dumps(params))
+            
+            if "compress" in model_name:
+                print_embedding(result_dict=response.json(), compress=True)
+            else:
+                print_embedding(result_dict=response.json())
 
             end = time.time() * 1000
             times_list.append(end-start)
             result_list.append(200)
+        except requests.RequestException as e:
+            logger.error(f"Request failed: {e}")
+            times_list.append(10000)
+            result_list.append(0)
     return times_list, result_list
 
-def start_threads(url, model_name, works, times, init_timeout_s, sequence, max_length, pooler):
+def start_threads(url, model_name, works, times, params):
     """
     concurrency test start
     :param func:
@@ -69,7 +80,7 @@ def start_threads(url, model_name, works, times, init_timeout_s, sequence, max_l
     start = utils.get_cur_millisecond()
 
     for i in range(works): 
-        all_task.append(executor.submit(infer, url, model_name, init_timeout_s, sequence, max_length, pooler, times))
+        all_task.append(executor.submit(infer, url, model_name, params, times))
 
     wait(all_task, return_when=ALL_COMPLETED)
     end = utils.get_cur_millisecond()
@@ -89,12 +100,12 @@ def start_threads(url, model_name, works, times, init_timeout_s, sequence, max_l
     return time_list, result_list, time_used, tps_request
 
 
-def start_multiprocessing(url, model_name, processes, num_thread, times, init_timeout_s, sequence, max_length, pooler):
+def start_multiprocessing(url, model_name, processes, num_thread, times, params):
     pool = multiprocessing.Pool(processes=processes)
     all_p = list()
 
     for i in range(processes):
-        all_p.append(pool.apply_async(start_threads, (url, model_name, num_thread, times, init_timeout_s, sequence, max_length, pooler)))
+        all_p.append(pool.apply_async(start_threads, (url, model_name, num_thread, times, params)))
 
     logger.info("[start_multiprocessing] start ...")
     pool.close()
@@ -154,22 +165,27 @@ if __name__ == '__main__':
     parser, args = parse_argvs()
 
     # sequence = np.array(["你好，介绍一下你自己"])
-    sequence = np.array([args.text.encode('utf-8')])
+    # sequence = np.array([args.text.encode('utf-8')])
     # sequence = np.array([args.text.encode('utf-8'), "你好，介绍一下你自己".encode('utf-8')])
     # sequence = np.array([args.text.encode('utf-8'), "你好，介绍一下你自己".encode('utf-8'), "hello, world".encode('utf-8'), "危险车辆怎么过渡？".encode('utf-8')])
-    max_length = np.array([512], dtype=np.int32)
+    # max_length = np.array([512], dtype=np.int32)
     pooler = np.array([args.pooler.encode('utf-8')])
 
-    logger.info(f"Input: {sequence}")
     logger.info("Sending request")
 
-    start_multiprocessing(url=args.url, 
+    url = "{}/v2/models/{}/generate".format(args.url, args.model_name)
+    logger.info(f"[url] {url}")
+    
+    base_params = {
+        "text": [args.text],
+        # "text": [args.text, "你好，介绍一下你自己"],
+        "max_length": 512,
+        "pooler": "cls"
+    }
+    start_multiprocessing(url=url, 
                           model_name=args.model_name,
                           processes=args.processes, 
                           num_thread=args.num_thread,
                           times=args.times, 
-                          init_timeout_s=args.init_timeout_s, 
-                          sequence=sequence, 
-                          max_length=max_length, 
-                          pooler=pooler)
+                          params=base_params)
 

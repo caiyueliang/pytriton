@@ -1,4 +1,4 @@
-name: "bert_batch"
+name: "embedding_compress_if"
 backend: "python"
 max_batch_size: 8
 

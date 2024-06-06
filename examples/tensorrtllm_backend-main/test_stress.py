@@ -30,6 +30,17 @@ from utils import utils
 
 # HEADER = {'Content-Type': 'application/json; charset=utf-8'}
 
+def print_embedding(result_dict, compress=False):
+    if compress is True:
+        embeddings = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
+        embeddings = embeddings.tolist()
+        for embed in embeddings:
+            logger.info(f"[embedding] len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
+    else:
+        for embed in result_dict['embedding'][0]:
+            logger.info(f"[embedding] len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
+
+
 def infer(url, model_name, init_timeout_s, sequence, max_length, pooler, times):
     times_list = []
     result_list = []
@@ -37,15 +48,10 @@ def infer(url, model_name, init_timeout_s, sequence, max_length, pooler, times):
         for i in range(times):
             start = time.time() * 1000
             result_dict = client.infer_sample(sequence, max_length, pooler)
-            # ==========================================================================================
-            # 未压缩
-            # logger.info(f"[infer] {result_dict['embedding'][0][0]}")
-            # ==========================================================================================
-            # 压缩
-            # embeddings = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
-            # embeddings = embeddings.tolist()
-            # for embed in embeddings:
-            #     logger.info(f"[send_request] embedding: len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
+            if "compress" in model_name:
+                print_embedding(result_dict=result_dict, compress=True)
+            else:
+                print_embedding(result_dict=result_dict)
 
             end = time.time() * 1000
             times_list.append(end-start)

@@ -1,6 +1,9 @@
-regex
-fire
-tritonclient[all]
-transformers==4.36.1
-pandas
-tabulate
+# regex
+# fire
+# tritonclient[all]
+# transformers==4.36.1
+# pandas
+# tabulate
+loguru
+nvidia-pytriton==0.5.5
+

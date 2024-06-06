@@ -6,6 +6,7 @@ HOST=${HOST:=0.0.0.0}
 PORT=${PORT:=8080}
 GRPC_PORT=${GRPC_PORT:=8081}
 METRICS_PORT=${METRICS_PORT:=8082}
+MODEL_REPOSITORY=${MODEL_REPOSITORY:="/home/server/triton_model_embedding/"}
 MODEL_PATH_EMBEDDING=${MODEL_PATH_EMBEDDING:="/mnt/publish-data/train_data/embedding/bce-embedding-base_v1/"}
 MODEL_PATH_EMBEDDING_TRT=${MODEL_PATH_EMBEDDING_TRT:="/mnt/publish-data/train_data/embedding/bce-embedding-base_v1_triton_trt/"}
 MODEL_TRT_NAME=${MODEL_TRT_NAME:="RobertaModel_float16_tp1_rank0.engine"}
@@ -20,6 +21,7 @@ echo "======================================================================"
 echo "[PORT] ${PORT}"
 echo "[GRPC_PORT] ${GRPC_PORT}"
 echo "[METRICS_PORT] ${METRICS_PORT}"
+echo "[MODEL_REPOSITORY] ${MODEL_REPOSITORY}"
 echo "[MODEL_PATH_EMBEDDING] ${MODEL_PATH_EMBEDDING}"
 echo "[MODEL_PATH_EMBEDDING_TRT] ${MODEL_PATH_EMBEDDING_TRT}"
 echo "[MODEL_TRT_NAME] ${MODEL_TRT_NAME}"
@@ -50,7 +52,7 @@ echo "======================================================================"
 echo "start triton server ..."
 
 /opt/tritonserver/bin/tritonserver \
-    --model-repository=/data/caiyueliang/pytriton/examples/tensorrtllm_backend-main/triton_model_embedding/ \
+    --model-repository=${MODEL_REPOSITORY} \
     --http-port=${PORT} \
     --grpc-port=${GRPC_PORT} \
     --metrics-port=${METRICS_PORT}
