@@ -24,7 +24,7 @@ import tensorrt as trt
 from transformers import BertConfig, BertForQuestionAnswering, BertForSequenceClassification, BertModel  # isort:skip
 from transformers import RobertaConfig, RobertaForQuestionAnswering, RobertaForSequenceClassification, RobertaModel  # isort:skip
 from transformers import XLMRobertaModel, XLMRobertaForSequenceClassification
-from .weight import (load_from_hf_cls_model, load_from_hf_model,
+from weight import (load_from_hf_cls_model, load_from_hf_model,
                     load_from_hf_qa_model)
 
 from loguru import logger
