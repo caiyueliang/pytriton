@@ -202,11 +202,11 @@ class TritonPythonModel:
         embeddings_g = embeddings_group(embeddings=embeddings, group_sizes=group_list)
         # pb_utils.Logger.log_warn(f"embeddings_g: {embeddings_g}")
         for embedding in embeddings_g:
-            pb_utils.Logger.log_warn(f"embedding: {embedding.shape}")
+            # pb_utils.Logger.log_warn(f"embedding: {embedding.shape}")
             embedding = embedding.tobytes()
-            pb_utils.Logger.log_warn(f"[embedding] len: {len(embedding)}")
+            # pb_utils.Logger.log_warn(f"[embedding] len: {len(embedding)}")
             embedding = np.array([[embedding]], dtype=np.bytes_)
-            pb_utils.Logger.log_warn(f"[embedding] {embedding}")
+            # pb_utils.Logger.log_warn(f"[embedding] {embedding}")
             inference_response = pb_utils.InferenceResponse(
                 output_tensors = [pb_utils.Tensor("embedding", embedding)]
             )

@@ -37,7 +37,11 @@ def infer(url, model_name, init_timeout_s, sequence, max_length, pooler, times):
         for i in range(times):
             start = time.time() * 1000
             result_dict = client.infer_sample(sequence, max_length, pooler)
-            # # logger.warning(f"[infer] {result_dict['embedding']}")
+            # ==========================================================================================
+            # 未压缩
+            # logger.info(f"[infer] {result_dict['embedding'][0][0]}")
+            # ==========================================================================================
+            # 压缩
             # embeddings = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
             # embeddings = embeddings.tolist()
             # for embed in embeddings:
