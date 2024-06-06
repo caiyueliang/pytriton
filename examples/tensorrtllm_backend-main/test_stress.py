@@ -44,14 +44,17 @@ def print_embedding(result_dict, compress=False):
 def infer(url, model_name, init_timeout_s, sequence, max_length, pooler, times):
     times_list = []
     result_list = []
+    
+    # for i in range(times):
+    #     with ModelClient(url, model_name, init_timeout_s=init_timeout_s) as client:
     with ModelClient(url, model_name, init_timeout_s=init_timeout_s) as client:
         for i in range(times):
             start = time.time() * 1000
             result_dict = client.infer_sample(sequence, max_length, pooler)
-            if "compress" in model_name:
-                print_embedding(result_dict=result_dict, compress=True)
-            else:
-                print_embedding(result_dict=result_dict)
+            # if "compress" in model_name:
+            #     print_embedding(result_dict=result_dict, compress=True)
+            # else:
+            #     print_embedding(result_dict=result_dict)
 
             end = time.time() * 1000
             times_list.append(end-start)

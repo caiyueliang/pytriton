@@ -48,11 +48,10 @@ def infer(url, model_name, params, times):
         try:
             start = time.time() * 1000
             response = requests.post(url, headers=headers, data=json.dumps(params))
-            
-            if "compress" in model_name:
-                print_embedding(result_dict=response.json(), compress=True)
-            else:
-                print_embedding(result_dict=response.json())
+            # if "compress" in model_name:
+            #     print_embedding(result_dict=response.json(), compress=True)
+            # else:
+            #     print_embedding(result_dict=response.json())
 
             end = time.time() * 1000
             times_list.append(end-start)
@@ -164,13 +163,6 @@ def parse_argvs():
 if __name__ == '__main__':
     parser, args = parse_argvs()
 
-    # sequence = np.array(["你好，介绍一下你自己"])
-    # sequence = np.array([args.text.encode('utf-8')])
-    # sequence = np.array([args.text.encode('utf-8'), "你好，介绍一下你自己".encode('utf-8')])
-    # sequence = np.array([args.text.encode('utf-8'), "你好，介绍一下你自己".encode('utf-8'), "hello, world".encode('utf-8'), "危险车辆怎么过渡？".encode('utf-8')])
-    # max_length = np.array([512], dtype=np.int32)
-    pooler = np.array([args.pooler.encode('utf-8')])
-
     logger.info("Sending request")
 
     url = "{}/v2/models/{}/generate".format(args.url, args.model_name)
@@ -180,7 +172,7 @@ if __name__ == '__main__':
         "text": [args.text],
         # "text": [args.text, "你好，介绍一下你自己"],
         "max_length": 512,
-        "pooler": "cls"
+        "pooler": args.pooler
     }
     start_multiprocessing(url=url, 
                           model_name=args.model_name,
