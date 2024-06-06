@@ -6,8 +6,8 @@ HOST=${HOST:=0.0.0.0}
 PORT=${PORT:=8080}
 GRPC_PORT=${GRPC_PORT:=8081}
 METRICS_PORT=${METRICS_PORT:=8082}
-MODEL_PATH_EMBEDDING=${MODEL_PATH_EMBEDDING:="/mnt/publish-data/pretrain_models/bert/bce-embedding-base_v1/"}
-MODEL_PATH_EMBEDDING_TRT=${MODEL_PATH_EMBEDDING_TRT:="/mnt/publish-data/pretrain_models/trt/bce-embedding-base_v1_trt/"}
+MODEL_PATH_EMBEDDING=${MODEL_PATH_EMBEDDING:="/mnt/publish-data/train_data/embedding/bce-embedding-base_v1/"}
+MODEL_PATH_EMBEDDING_TRT=${MODEL_PATH_EMBEDDING_TRT:="/mnt/publish-data/train_data/embedding/bce-embedding-base_v1_triton_trt/"}
 MODEL_TRT_NAME=${MODEL_TRT_NAME:="RobertaModel_float16_tp1_rank0.engine"}
 OPT_BATCH_SIZE=${OPT_BATCH_SIZE:=1}
 MAX_BATCH_SIZE=${MAX_BATCH_SIZE:=128}

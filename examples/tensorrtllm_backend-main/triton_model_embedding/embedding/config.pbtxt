@@ -1,4 +1,4 @@
-name: "bert"
+name: "embedding"
 backend: "python"
 max_batch_size: 8
 
@@ -18,7 +18,7 @@ input [
 output [
     {
         name: "embedding"
-        data_type: TYPE_STRING
+        data_type: TYPE_FP32
         dims: [-1]
     }
 ]
@@ -30,7 +30,7 @@ dynamic_batching {
 
 instance_group [
     {
-        count: 1
+        count: 4
         kind : KIND_GPU
         gpus: [0]
     }
@@ -39,12 +39,12 @@ instance_group [
 parameters {
   key: "tokenizer_dir"
   value: {
-    string_value: "/mnt/publish-data/pretrain_models/bert/bce-embedding-base_v1/"
+    string_value: "/mnt/publish-data/train_data/embedding/bce-embedding-base_v1/"
   }
 }
 parameters {
     key: "engine_dir"
     value: {
-        string_value: "/data/caiyueliang/tensorrt-llm/examples/bert/bce-embedding-trt-llm-fp16-test/RobertaModel_float16_tp1_rank0.engine"
+        string_value: "/mnt/publish-data/train_data/embedding/bce-embedding-base_v1_triton_trt/RobertaModel_float16_tp1_rank0.engine"
     }
 }

@@ -44,12 +44,12 @@ instance_group [
 parameters {
   key: "tokenizer_dir"
   value: {
-    string_value: "/mnt/publish-data/pretrain_models/bert/bce-embedding-base_v1/"
+    string_value: "/mnt/publish-data/train_data/embedding/bce-embedding-base_v1/"
   }
 }
 parameters {
     key: "engine_dir"
     value: {
-        string_value: "/data/caiyueliang/tensorrt-llm/examples/bert/bce-embedding-trt-llm-fp16-mbs128-obs1/RobertaModel_float16_tp1_rank0.engine"
+        string_value: "/mnt/publish-data/train_data/embedding/bce-embedding-base_v1_triton_trt/RobertaModel_float16_tp1_rank0.engine"
     }
 }

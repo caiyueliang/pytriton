@@ -53,6 +53,16 @@ def trt_dtype_to_torch(dtype):
         raise TypeError("%s is not supported" % dtype)
 
 
+def embeddings_group(embeddings, group_sizes):
+    groups = []
+    start_index = 0
+    for size in group_sizes:
+        group = embeddings[start_index: start_index + size]
+        groups.append(group)
+        start_index += size
+    return groups
+
+
 class TritonPythonModel:
     """Your Python model must use the same class name. Every Python model
     that is created must have "TritonPythonModel" as the class name.
@@ -115,29 +125,32 @@ class TritonPythonModel:
         """
         responses = []
         text_batch = []
-
+        group_list = []
         # Every Python backend must iterate through list of requests and create
         # an instance of pb_utils.InferenceResponse class for each of them. You
         # should avoid storing any of the input Tensors in the class attributes
         # as they will be overridden in subsequent inference requests. You can
         # make a copy of the underlying NumPy array and store it if it is
         # required.
+
         # pb_utils.Logger.log_warn(f"requests len: {len(requests)}")
         for idx, request in enumerate(requests):
-            # Get input tensors
-            # text = pb_utils.get_input_tensor_by_name(request, 'text').as_numpy()
-            text = pb_utils.get_input_tensor_by_name(request, 'text').as_numpy()
-            # pb_utils.Logger.log_warn(f"idx: {idx}, text: {text}, type: {type(text)}")
-            text = text[0][0].decode("utf-8")
-            # pb_utils.Logger.log_warn(f"text: {text}")
-            
             max_length = pb_utils.get_input_tensor_by_name(request, 'max_length').as_numpy()
             max_length = max_length[0][0]
             # pb_utils.Logger.log_warn(f"[execute] text: {text}; max_length: {max_length}")
 
-            text_batch.append(text)
+            # Get input tensors
+            text_per_req = pb_utils.get_input_tensor_by_name(request, 'text').as_numpy()
+            text_len_req = len(text_per_req[0])
+            # pb_utils.Logger.log_warn(f"idx: {idx}, text: {text_per_req}, type: {type(text_per_req)}, len: {text_len_req}")
+            group_list.append(text_len_req)
 
-        pb_utils.Logger.log_warn(f"text len: {len(text)}; max_length: {max_length}; text_batch: {text_batch}")
+            for text_bytes in text_per_req[0]:
+                text = text_bytes.decode("utf-8")
+                # pb_utils.Logger.log_warn(f"text: {text}")
+                text_batch.append(text)
+
+        pb_utils.Logger.log_warn(f"group_list: {group_list}; text len: {len(text_batch)}; max_length: {max_length}; text_batch: {text_batch}; ")
 
         # pb_utils.Logger.log_warn(f"text_batch len: {len(requests)}")
 
@@ -184,9 +197,16 @@ class TritonPythonModel:
         embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
 
         embeddings = embeddings.cpu().detach().numpy()
-        for idx, embedding in enumerate(embeddings):
-            embedding = embedding.tobytes()
-            embedding = np.array([[embedding]], dtype=np.bytes_)
+        # pb_utils.Logger.log_warn(f"embeddings: {type(embeddings)}, {embeddings}")
+
+        embeddings_g = embeddings_group(embeddings=embeddings, group_sizes=group_list)
+        # pb_utils.Logger.log_warn(f"embeddings_g: {embeddings_g}")
+        for embedding in embeddings_g:
+            # pb_utils.Logger.log_warn(f"embedding: {embedding.shape}")
+            embedding = embedding.tolist()
+            # pb_utils.Logger.log_warn(f"[embedding] len: {len(embedding)}")
+            embedding = np.array([[embedding]], dtype=np.float32)
+            # pb_utils.Logger.log_warn(f"[embedding] {embedding}")
             inference_response = pb_utils.InferenceResponse(
                 output_tensors = [pb_utils.Tensor("embedding", embedding)]
             )
