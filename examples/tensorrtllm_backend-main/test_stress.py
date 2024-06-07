@@ -151,6 +151,7 @@ def parse_argvs():
     parser.add_argument("--num_thread", type=int, default=1, help="Number of requests per client.", required=False)
     parser.add_argument("--times", help="test times per processes", type=int, default=10)
     parser.add_argument("--pooler", help="pooler", type=str, default="cls")
+    parser.add_argument("--batch_size", type=int, default=1, required=False)
     args = parser.parse_args()
 
     args = parser.parse_args()
@@ -163,13 +164,14 @@ if __name__ == '__main__':
     parser, args = parse_argvs()
 
     # sequence = np.array(["你好，介绍一下你自己"])
-    sequence = np.array([args.text.encode('utf-8')])
+    # sequence = np.array([args.text.encode('utf-8')])
+    sequence = np.array([args.text.encode('utf-8') for i in range(args.batch_size)])
     # sequence = np.array([args.text.encode('utf-8'), "你好，介绍一下你自己".encode('utf-8')])
     # sequence = np.array([args.text.encode('utf-8'), "你好，介绍一下你自己".encode('utf-8'), "hello, world".encode('utf-8'), "危险车辆怎么过渡？".encode('utf-8')])
     max_length = np.array([512], dtype=np.int32)
     pooler = np.array([args.pooler.encode('utf-8')])
 
-    logger.info(f"Input: {sequence}")
+    # logger.info(f"Input: {sequence}")
     logger.info("Sending request")
 
     start_multiprocessing(url=args.url, 

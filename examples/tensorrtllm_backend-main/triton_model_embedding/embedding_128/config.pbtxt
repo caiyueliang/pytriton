@@ -1,6 +1,6 @@
-name: "embedding"
+name: "embedding_128"
 backend: "python"
-max_batch_size: 8
+max_batch_size: 1
 
 input [
     {
@@ -22,11 +22,6 @@ output [
         dims: [-1, 768]
     }
 ]
-
-dynamic_batching {
-    preferred_batch_size: [ 1, 4, 8 ],
-    max_queue_delay_microseconds: 5000   # 等待时间
-}
 
 instance_group [
     {
