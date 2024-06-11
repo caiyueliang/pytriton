@@ -1,6 +1,6 @@
 name: "embedding"
 backend: "python"
-max_batch_size: 8
+max_batch_size: 16
 
 input [
     {
@@ -24,13 +24,13 @@ output [
 ]
 
 dynamic_batching {
-    preferred_batch_size: [ 1, 4, 8 ],
-    max_queue_delay_microseconds: 5000   # 等待时间
+    preferred_batch_size: [ 1, 8, 16 ],
+    max_queue_delay_microseconds: 1000   # 等待时间
 }
 
 instance_group [
     {
-        count: 1
+        count: 4
         kind : KIND_GPU
         gpus: [0]
     }
@@ -46,5 +46,6 @@ parameters {
     key: "engine_dir"
     value: {
         string_value: "/mnt/publish-data/train_data/embedding/bce-embedding-base_v1_triton_trt/RobertaModel_float16_tp1_rank0.engine"
+        # string_value: "/mnt/publish-data/train_data/embedding/bce-embedding-base_v1_triton_trt_opt1_max512/RobertaModel_float16_tp1_rank0.engine"
     }
 }
