@@ -177,8 +177,6 @@ class TritonPythonModel:
         # pb_utils.Logger.log_warn(f"shape input_ids_tensor: {trt_input_ids.shape}")
         # pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids.shape}")
         # pb_utils.Logger.log_warn(f"shape input_lengths_tensor: {trt_input_lengths.shape}")
-        # pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids}")
-        # pb_utils.Logger.log_warn(f"shape input_lengths_tensor: {trt_input_lengths}")
 
         usage_list = generage_usage(input_lengths=trt_input_lengths[0], group_sizes=group_list)
         # pb_utils.Logger.log_warn(f"[usage_list] {usage_list}")
@@ -188,7 +186,6 @@ class TritonPythonModel:
             'token_type_ids': trt_token_type_ids,
             'input_lengths': trt_input_lengths
         }
-
 
         output_info = self.session.infer_shapes([
                 TensorInfo('input_ids', trt.DataType.INT32, inputs['input_ids'].shape),
@@ -219,14 +216,11 @@ class TritonPythonModel:
         # pb_utils.Logger.log_warn(f"embeddings: {type(embeddings)}, {embeddings}")
 
         embeddings_g = tensor_group(tensor=embeddings, group_sizes=group_list)
-        # pb_utils.Logger.log_warn(f"embeddings_g: {embeddings_g}")
         for embedding, usage in zip(embeddings_g, usage_list):
             # pb_utils.Logger.log_warn(f"embedding: {embedding.shape}, usage: {usage}")
             embedding = embedding.tolist()
-            # pb_utils.Logger.log_warn(f"[embedding] len: {len(embedding)}")
             embedding = np.array([[embedding]], dtype=np.float32)
             usage_bytes = np.array([pickle.dumps(usage)])
-            # pb_utils.Logger.log_warn(f"[embedding] {embedding}")
             inference_response = pb_utils.InferenceResponse(
                 output_tensors = [
                     pb_utils.Tensor("embedding", embedding),
