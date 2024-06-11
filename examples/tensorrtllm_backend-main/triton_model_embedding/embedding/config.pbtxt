@@ -20,6 +20,11 @@ output [
         name: "embedding"
         data_type: TYPE_FP32
         dims: [-1, 768]
+    },
+    {
+        name: "usage"
+        data_type: TYPE_STRING
+        dims: [-1]
     }
 ]
 

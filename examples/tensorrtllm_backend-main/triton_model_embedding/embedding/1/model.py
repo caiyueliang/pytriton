@@ -1,5 +1,6 @@
 import os
 import json
+import pickle
 import torch
 import numpy as np
 import triton_python_backend_utils as pb_utils
@@ -53,14 +54,25 @@ def trt_dtype_to_torch(dtype):
         raise TypeError("%s is not supported" % dtype)
 
 
-def embeddings_group(embeddings, group_sizes):
+def tensor_group(tensor, group_sizes):
     groups = []
     start_index = 0
     for size in group_sizes:
-        group = embeddings[start_index: start_index + size]
+        group = tensor[start_index: start_index + size]
         groups.append(group)
         start_index += size
     return groups
+
+def generage_usage(input_lengths, group_sizes):
+    usage_list = []
+
+    input_len_group = tensor_group(tensor=input_lengths, group_sizes=group_sizes)
+    # pb_utils.Logger.log_warn(f"[input_len_group] {input_len_group}")
+    for input_len in input_len_group:
+        total_token = torch.sum(input_len).item()
+        prompt_tokens = (total_token - 2 * input_len.shape[0])
+        usage_list.append({"total_token": total_token, "prompt_tokens": prompt_tokens})
+    return usage_list
 
 
 class TritonPythonModel:
@@ -162,14 +174,21 @@ class TritonPythonModel:
         trt_token_type_ids = model_input.attention_mask.int().cuda()
         trt_input_lengths = model_input.attention_mask.sum(dim=1).unsqueeze(0).int().cuda()
 
+        # pb_utils.Logger.log_warn(f"shape input_ids_tensor: {trt_input_ids.shape}")
+        # pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids.shape}")
+        # pb_utils.Logger.log_warn(f"shape input_lengths_tensor: {trt_input_lengths.shape}")
+        # pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids}")
+        # pb_utils.Logger.log_warn(f"shape input_lengths_tensor: {trt_input_lengths}")
+
+        usage_list = generage_usage(input_lengths=trt_input_lengths[0], group_sizes=group_list)
+        # pb_utils.Logger.log_warn(f"[usage_list] {usage_list}")
+
         inputs = {
             'input_ids': trt_input_ids,
             'token_type_ids': trt_token_type_ids,
             'input_lengths': trt_input_lengths
         }
-        # pb_utils.Logger.log_warn(f"shape input_ids_tensor: {trt_input_ids.shape}")
-        # pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids.shape}")
-        # pb_utils.Logger.log_warn(f"shape input_lengths_tensor: {trt_input_lengths.shape}")
+
 
         output_info = self.session.infer_shapes([
                 TensorInfo('input_ids', trt.DataType.INT32, inputs['input_ids'].shape),
@@ -199,16 +218,20 @@ class TritonPythonModel:
         embeddings = embeddings.cpu().detach().numpy()
         # pb_utils.Logger.log_warn(f"embeddings: {type(embeddings)}, {embeddings}")
 
-        embeddings_g = embeddings_group(embeddings=embeddings, group_sizes=group_list)
+        embeddings_g = tensor_group(tensor=embeddings, group_sizes=group_list)
         # pb_utils.Logger.log_warn(f"embeddings_g: {embeddings_g}")
-        for embedding in embeddings_g:
-            # pb_utils.Logger.log_warn(f"embedding: {embedding.shape}")
+        for embedding, usage in zip(embeddings_g, usage_list):
+            # pb_utils.Logger.log_warn(f"embedding: {embedding.shape}, usage: {usage}")
             embedding = embedding.tolist()
             # pb_utils.Logger.log_warn(f"[embedding] len: {len(embedding)}")
             embedding = np.array([[embedding]], dtype=np.float32)
+            usage_bytes = np.array([pickle.dumps(usage)])
             # pb_utils.Logger.log_warn(f"[embedding] {embedding}")
             inference_response = pb_utils.InferenceResponse(
-                output_tensors = [pb_utils.Tensor("embedding", embedding)]
+                output_tensors = [
+                    pb_utils.Tensor("embedding", embedding),
+                    pb_utils.Tensor("usage", usage_bytes)
+                ]
             )
             responses.append(inference_response)
         

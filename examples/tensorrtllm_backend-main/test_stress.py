@@ -11,6 +11,7 @@ import os
 import argparse
 import requests
 import json
+import pickle
 import time
 import multiprocessing
 import numpy as np
@@ -37,6 +38,8 @@ def print_embedding(result_dict, compress=False):
         for embed in embeddings:
             logger.info(f"[embedding] len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
     else:
+        usage = pickle.loads(result_dict['usage'])
+        logger.info(f"[usage] {type(usage)}, {usage}")
         for embed in result_dict['embedding'][0]:
             logger.info(f"[embedding] len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
 
