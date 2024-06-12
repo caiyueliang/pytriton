@@ -65,13 +65,12 @@ def tensor_group(tensor, group_sizes):
 
 def generage_usage(input_lengths, group_sizes):
     usage_list = []
-
     input_len_group = tensor_group(tensor=input_lengths, group_sizes=group_sizes)
     # pb_utils.Logger.log_warn(f"[input_len_group] {input_len_group}")
     for input_len in input_len_group:
         total_token = torch.sum(input_len).item()
         prompt_tokens = (total_token - 2 * input_len.shape[0])
-        usage_list.append({"total_token": total_token, "prompt_tokens": prompt_tokens})
+        usage_list.append({"total_tokens": total_token, "prompt_tokens": prompt_tokens})
     return usage_list
 
 

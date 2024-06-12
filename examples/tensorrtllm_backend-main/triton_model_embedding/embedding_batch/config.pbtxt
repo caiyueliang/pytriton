@@ -1,4 +1,4 @@
-name: "embedding_128"
+name: "embedding_batch"
 backend: "python"
 max_batch_size: 1
 

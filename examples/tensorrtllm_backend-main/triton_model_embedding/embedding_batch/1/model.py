@@ -71,7 +71,7 @@ def generage_usage(input_lengths, group_sizes):
     for input_len in input_len_group:
         total_token = torch.sum(input_len).item()
         prompt_tokens = (total_token - 2 * input_len.shape[0])
-        usage_list.append({"total_token": total_token, "prompt_tokens": prompt_tokens})
+        usage_list.append({"total_tokens": total_token, "prompt_tokens": prompt_tokens})
     return usage_list
 
 
