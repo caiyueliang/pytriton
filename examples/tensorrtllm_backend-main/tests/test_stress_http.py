@@ -33,6 +33,7 @@ headers = {'Content-Type': 'application/json', 'authorization': 'eyJ0eXAiOiJKV1Q
 def print_embedding(result_dict, compress=False):
     if compress is True:
         embeddings = np.frombuffer(result_dict['embedding'], dtype=np.float16).reshape(-1, 768)
+        # embeddings = np.frombuffer(result_dict['embedding'], dtype=np.float32).reshape(-1, 768)
         embeddings = embeddings.tolist()
         for embed in embeddings:
             logger.info(f"[embedding] len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
@@ -138,12 +139,12 @@ def parse_argvs():
     parser = argparse.ArgumentParser(description='test xbot')
 
 
-    parser.add_argument("--url", default="localhost", help=(
+    parser.add_argument("--url", default="http://localhost:8080/v2/models/embedding/generate", help=(
             "Url to Triton server (ex. grpc://localhost:8001)."
             "HTTP protocol with default port is used if parameter is not provided"
         ), required=False)
     
-    parser.add_argument("--model_name", type=str, default="BERT", required=False)
+    parser.add_argument("--model_name", type=str, default="compress", required=False)
     parser.add_argument("--init-timeout-s", type=float, default=600.0, help="Server and model ready state timeout in seconds", required=False)
     parser.add_argument("--text", type=str, default="我是中国人", required=False)
     parser.add_argument("--use_trt", type=bool, default=False, required=False)
@@ -165,16 +166,17 @@ if __name__ == '__main__':
 
     logger.info("Sending request")
 
-    url = "{}/v2/models/{}/generate".format(args.url, args.model_name)
-    logger.info(f"[url] {url}")
+    # url = "{}/v2/models/{}/generate".format(args.url, args.model_name)
+    # logger.info(f"[url] {url}")
     
     base_params = {
         "text": [args.text],
         # "text": [args.text, "你好，介绍一下你自己"],
         "max_length": 512,
-        "pooler": args.pooler
+        "batch_size": 1,
+        "pooler": args.pooler,
     }
-    start_multiprocessing(url=url, 
+    start_multiprocessing(url=args.url, 
                           model_name=args.model_name,
                           processes=args.processes, 
                           num_thread=args.num_thread,

@@ -50,6 +50,7 @@ def infer(url, model_name, init_timeout_s, sequence, max_length, pooler, times):
     
     # for i in range(times):
     #     with ModelClient(url, model_name, init_timeout_s=init_timeout_s) as client:
+    # with ModelClient(url, model_name, init_timeout_s=init_timeout_s, lazy_init=False, ensure_model_is_ready=False) as client:
     with ModelClient(url, model_name, init_timeout_s=init_timeout_s) as client:
         for i in range(times):
             start = time.time() * 1000
