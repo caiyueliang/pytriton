@@ -48,7 +48,6 @@ def infer(url, model_name, init_timeout_s, sequence, max_length, pooler, times):
     times_list = []
     result_list = []
     
-    # with ModelClient(url, model_name, init_timeout_s=init_timeout_s, lazy_init=False, ensure_model_is_ready=False) as client:
     with ModelClient(url, model_name, init_timeout_s=init_timeout_s) as client:
         for i in range(times):
             start = time.time() * 1000
@@ -129,11 +128,6 @@ def start_multiprocessing(url, model_name, processes, num_thread, times, init_ti
     utils.calc_time_p99(time_list=total_time_p)
     utils.calc_success_rate(result_list=total_result_p)
 
-
-# python stress_test.py --processes 1 --works 1 --times 10000
-# python stress_test.py --processes 4 --works 2 --times 20000
-# python stress_test.py --processes 8 --works 2 --times 20000
-# python stress_test.py --processes 8 --works 4 --times 20000
 def parse_argvs():
     """ parse argv """
     parser = argparse.ArgumentParser(description='test xbot')
@@ -165,11 +159,8 @@ def parse_argvs():
 if __name__ == '__main__':
     parser, args = parse_argvs()
 
-    # sequence = np.array(["你好，介绍一下你自己"])
-    # sequence = np.array([args.text.encode('utf-8')])
     sequence = np.array([args.text.encode('utf-8') for i in range(args.batch_size)])
     # sequence = np.array([args.text.encode('utf-8'), "你好，介绍一下你自己".encode('utf-8')])
-    # sequence = np.array([args.text.encode('utf-8'), "你好，介绍一下你自己".encode('utf-8'), "hello, world".encode('utf-8'), "危险车辆怎么过渡？".encode('utf-8')])
     max_length = np.array([512], dtype=np.int32)
     pooler = np.array([args.pooler.encode('utf-8')])
 
