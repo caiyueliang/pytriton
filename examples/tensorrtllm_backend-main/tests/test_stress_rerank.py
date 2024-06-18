@@ -145,6 +145,7 @@ def parse_argvs():
     parser.add_argument("--times", help="test times per processes", type=int, default=10)
     parser.add_argument("--pooler", help="pooler", type=str, default="cls")
     parser.add_argument("--print_log", type=bool, default=False, required=False)
+    parser.add_argument("--batch_size", type=int, default=10, required=False)
     args = parser.parse_args()
 
     args = parser.parse_args()
@@ -160,7 +161,9 @@ if __name__ == '__main__':
     print_log = args.print_log
 
     query = np.array([args.query.encode('utf-8')])
-    candidate = np.array([candi.encode('utf-8') for candi in args.candidate])
+
+    candidate = args.candidate[:args.batch_size]
+    candidate = np.array([candi.encode('utf-8') for candi in candidate])
 
     # logger.info(f"query: {query}")
     # logger.info(f"candidate: {candidate}")

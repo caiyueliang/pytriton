@@ -1,4 +1,4 @@
-name: "rerank_single"
+name: "rerank_batch_torch"
 backend: "python"
 max_batch_size: 16
 
@@ -30,7 +30,7 @@ dynamic_batching {
 
 instance_group [
     {
-        count: 4
+        count: 1
         kind : KIND_GPU
         gpus: [0]
     }
