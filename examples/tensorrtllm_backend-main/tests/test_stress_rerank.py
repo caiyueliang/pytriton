@@ -33,27 +33,23 @@ from utils import utils
 model_name = ""
 print_log = False
 
-def print_response(result_dict, compress=False):
+def print_response(result_dict, compress=True):
     if compress is True:
-        embeddings = np.frombuffer(result_dict['embedding'][0], dtype=np.float16).reshape(-1, 768)
-        embeddings = embeddings.tolist()
-        for embed in embeddings:
-            logger.info(f"[embedding] len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
+        score = pickle.loads(result_dict['score'])
+        logger.info(f"[score] {type(score)}, {score}")
     else:
-        usage = pickle.loads(result_dict['usage'])
-        logger.info(f"[usage] {type(usage)}, {usage}")
-        for embed in result_dict['embedding'][0]:
-            logger.info(f"[embedding] len: {len(embed)}\n{embed[:10]}; \n{embed[-10:]}")
+        score = pickle.loads(result_dict['score'])
+        logger.info(f"[score] {type(score)}, {score}")
 
 
-def infer(url, init_timeout_s, sequence, max_length, pooler, times):
+def infer(url, init_timeout_s, query, candidate, times):
     times_list = []
     result_list = []
     
     with ModelClient(url, model_name, init_timeout_s=init_timeout_s) as client:
         for i in range(times):
             start = time.time() * 1000
-            result_dict = client.infer_sample(sequence, max_length, pooler)
+            result_dict = client.infer_sample(query, candidate)
             if print_log is True:
                 print_response(result_dict=result_dict)
 
@@ -62,7 +58,7 @@ def infer(url, init_timeout_s, sequence, max_length, pooler, times):
             result_list.append(200)
     return times_list, result_list
 
-def start_threads(url, works, times, init_timeout_s, sequence, max_length, pooler):
+def start_threads(url, works, times, init_timeout_s, query, candidate):
     """
     concurrency test start
     :param func:
@@ -79,7 +75,7 @@ def start_threads(url, works, times, init_timeout_s, sequence, max_length, poole
     start = utils.get_cur_millisecond()
 
     for i in range(works): 
-        all_task.append(executor.submit(infer, url, init_timeout_s, sequence, max_length, pooler, times))
+        all_task.append(executor.submit(infer, url, init_timeout_s, query, candidate, times))
 
     wait(all_task, return_when=ALL_COMPLETED)
     end = utils.get_cur_millisecond()
@@ -99,12 +95,12 @@ def start_threads(url, works, times, init_timeout_s, sequence, max_length, poole
     return time_list, result_list, time_used, tps_request
 
 
-def start_multiprocessing(url, processes, num_thread, times, init_timeout_s, sequence, max_length, pooler):
+def start_multiprocessing(url, processes, num_thread, times, init_timeout_s, query, candidate):
     pool = multiprocessing.Pool(processes=processes)
     all_p = list()
 
     for i in range(processes):
-        all_p.append(pool.apply_async(start_threads, (url, num_thread, times, init_timeout_s, sequence, max_length, pooler)))
+        all_p.append(pool.apply_async(start_threads, (url, num_thread, times, init_timeout_s, query, candidate)))
 
     logger.info("[start_multiprocessing] start ...")
     pool.close()
@@ -138,16 +134,16 @@ def parse_argvs():
             "HTTP protocol with default port is used if parameter is not provided"
         ), required=False)
     
-    parser.add_argument("--model_name", type=str, default="BERT", required=False)
+    parser.add_argument("--model_name", type=str, default="rerank", required=False)
     parser.add_argument("--init-timeout-s", type=float, default=600.0, help="Server and model ready state timeout in seconds", required=False)
-    parser.add_argument("--text", type=str, default="我是中国人", required=False)
+    parser.add_argument("--query", type=str, default="刘德华老婆是谁？", required=False)
+    parser.add_argument("--candidate", type=list, default=["刘德华老婆是叶丽倩", "刘德华是一名歌手", "周杰伦的老婆是昆凌"], required=False)
     parser.add_argument("--use_trt", type=bool, default=False, required=False)
     parser.add_argument("--verbose", action="store_true", default=False)
     parser.add_argument("--processes", help="processes num", type=int, default=1)
     parser.add_argument("--num_thread", type=int, default=1, help="Number of requests per client.", required=False)
     parser.add_argument("--times", help="test times per processes", type=int, default=10)
     parser.add_argument("--pooler", help="pooler", type=str, default="cls")
-    parser.add_argument("--batch_size", type=int, default=1, required=False)
     parser.add_argument("--print_log", type=bool, default=False, required=False)
     args = parser.parse_args()
 
@@ -163,12 +159,11 @@ if __name__ == '__main__':
     model_name = args.model_name
     print_log = args.print_log
 
-    sequence = np.array([args.text.encode('utf-8') for i in range(args.batch_size)])
-    # sequence = np.array([args.text.encode('utf-8'), "你好，介绍一下你自己".encode('utf-8')])
-    max_length = np.array([512], dtype=np.int32)
-    pooler = np.array([args.pooler.encode('utf-8')])
+    query = np.array([args.query.encode('utf-8')])
+    candidate = np.array([candi.encode('utf-8') for candi in args.candidate])
 
-    # logger.info(f"Input: {sequence}")
+    # logger.info(f"query: {query}")
+    # logger.info(f"candidate: {candidate}")
     logger.info("Sending request")
 
     start_multiprocessing(url=args.url,
@@ -176,7 +171,6 @@ if __name__ == '__main__':
                           num_thread=args.num_thread,
                           times=args.times, 
                           init_timeout_s=args.init_timeout_s, 
-                          sequence=sequence, 
-                          max_length=max_length, 
-                          pooler=pooler)
+                          query=query, 
+                          candidate=candidate)
 
