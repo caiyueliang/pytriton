@@ -37,17 +37,6 @@ class RerankerModel:
         ):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
-        # self.model = AutoModelForSequenceClassification.from_pretrained(model_name_or_path, **kwargs)
-        # self.device = device
-
-        # # self.num_gpus = 1
-        # if use_fp16:
-        #     self.model.half()
-
-        # self.model.eval()
-        # self.model = self.model.to(self.device)
-
-        # for advanced preproc of tokenization
         self.sep_id = self.tokenizer.sep_token_id
         self.max_length = kwargs.get('max_length', 512)
         self.overlap_tokens = kwargs.get('overlap_tokens', 80)
@@ -57,8 +46,6 @@ class RerankerModel:
             with open(trt_model_name_or_path, 'rb') as f:
                 engine_buffer = f.read()
             self.session = Session.from_serialized_engine(engine_buffer)
-
-        # logging.info(f"Execute device: {self.device};\t use fp16: {use_fp16}")
 
     def compute_score(
             self, 
@@ -123,45 +110,6 @@ class RerankerModel:
         if len(scores_collection) == 1:
             return scores_collection[0]
         return scores_collection
-    
-    # def compute_score(
-    #         self, 
-    #         sentence_pairs: Union[List[Tuple[str, str]], Tuple[str, str]], 
-    #         batch_size: int = 128,
-    #         max_length: int = 512,
-    #         enable_tqdm: bool=False,
-    #         **kwargs
-    #     ):
-    #     # if self.num_gpus > 1:
-    #     #     batch_size = batch_size * self.num_gpus
-        
-    #     assert isinstance(sentence_pairs, list)
-    #     if isinstance(sentence_pairs[0], str):
-    #         sentence_pairs = [sentence_pairs]
-
-    #     with torch.no_grad():
-    #         scores_collection = []
-    #         for sentence_id in tqdm(range(0, len(sentence_pairs), batch_size), desc='Calculate scores', disable=not enable_tqdm):
-    #             sentence_pairs_batch = sentence_pairs[sentence_id: sentence_id + batch_size]
-    #             inputs = self.tokenizer(
-    #                         sentence_pairs_batch, 
-    #                         padding=True,
-    #                         truncation=True,
-    #                         max_length=max_length,
-    #                         return_tensors="pt"
-    #                     )
-    #             inputs_on_device = {k: v.to(self.device) for k, v in inputs.items()} 
-    #             # token_type_ids = inputs.attention_mask.sum(dim=1).unsqueeze(0).int().cuda()
-    #             # token_type_ids = inputs.attention_mask.int().cuda()
-    #             # inputs_on_device["token_type_ids"] = token_type_ids
-    #             # logging.warning(f"[inputs_on_device] {inputs_on_device}")
-    #             scores = self.model(**inputs_on_device, return_dict=True).logits.view(-1,).float()
-    #             scores = torch.sigmoid(scores)
-    #             scores_collection.extend(scores.cpu().numpy().tolist())
-        
-    #     if len(scores_collection) == 1:
-    #         return scores_collection[0]
-    #     return scores_collection
     
     def _merge_inputs(self, chunk1_raw, chunk2):
         chunk1 = deepcopy(chunk1_raw)
