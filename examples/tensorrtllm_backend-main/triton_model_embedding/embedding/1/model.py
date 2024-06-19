@@ -154,7 +154,7 @@ class TritonPythonModel:
             if max_length is None:
                 max_length = MAX_LENGTH
             else:
-                max_length = max_length.as_numpy()[0][0]
+                max_length = max_length.as_numpy()[0]
             max_length = max_length if max_length < MAX_LENGTH else MAX_LENGTH
             max_length_list.append(max_length)
 
