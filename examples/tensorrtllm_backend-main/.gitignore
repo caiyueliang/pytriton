@@ -9,3 +9,5 @@ build/
 .coverage
 *.onnx
 tmp/
+
+core.*
