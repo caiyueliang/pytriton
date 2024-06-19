@@ -9,10 +9,22 @@ from copy import deepcopy
 
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
+import triton_python_backend_utils as pb_utils
+import tensorrt as trt
 from tensorrt_llm.runtime import ModelRunner, SamplingConfig
 from tensorrt_llm.runtime import Session, TensorInfo
 
 
+def trt_dtype_to_torch(dtype):
+    if dtype == trt.float16:
+        return torch.float16
+    elif dtype == trt.float32:
+        return torch.float32
+    elif dtype == trt.int32:
+        return torch.int32
+    else:
+        raise TypeError("%s is not supported" % dtype)
+    
 
 class RerankerModel:
     def __init__(
@@ -48,7 +60,6 @@ class RerankerModel:
 
         # logging.info(f"Execute device: {self.device};\t use fp16: {use_fp16}")
 
-    
     def compute_score(
             self, 
             sentence_pairs: Union[List[Tuple[str, str]], Tuple[str, str]], 
@@ -57,36 +68,100 @@ class RerankerModel:
             enable_tqdm: bool=False,
             **kwargs
         ):
-        # if self.num_gpus > 1:
-        #     batch_size = batch_size * self.num_gpus
         
         assert isinstance(sentence_pairs, list)
         if isinstance(sentence_pairs[0], str):
             sentence_pairs = [sentence_pairs]
 
-        with torch.no_grad():
-            scores_collection = []
-            for sentence_id in tqdm(range(0, len(sentence_pairs), batch_size), desc='Calculate scores', disable=not enable_tqdm):
-                sentence_pairs_batch = sentence_pairs[sentence_id: sentence_id + batch_size]
-                inputs = self.tokenizer(
-                            sentence_pairs_batch, 
-                            padding=True,
-                            truncation=True,
-                            max_length=max_length,
-                            return_tensors="pt"
-                        )
-                inputs_on_device = {k: v.to(self.device) for k, v in inputs.items()} 
-                # token_type_ids = inputs.attention_mask.sum(dim=1).unsqueeze(0).int().cuda()
-                # token_type_ids = inputs.attention_mask.int().cuda()
-                # inputs_on_device["token_type_ids"] = token_type_ids
-                # logging.warning(f"[inputs_on_device] {inputs_on_device}")
-                scores = self.model(**inputs_on_device, return_dict=True).logits.view(-1,).float()
-                scores = torch.sigmoid(scores)
-                scores_collection.extend(scores.cpu().numpy().tolist())
+        scores_collection = []
+        for sentence_id in tqdm(range(0, len(sentence_pairs), batch_size), desc='Calculate scores', disable=not enable_tqdm):
+            sentence_pairs_batch = sentence_pairs[sentence_id: sentence_id + batch_size]
+            model_inputs = self.tokenizer(
+                sentence_pairs_batch, 
+                padding=True,
+                truncation=True,
+                max_length=max_length,
+                return_tensors="pt"
+            )
         
+            trt_input_ids = model_inputs.input_ids.int().cuda()
+            trt_token_type_ids = model_inputs.attention_mask.int().cuda()
+            trt_input_lengths = model_inputs.attention_mask.sum(dim=1).unsqueeze(0).int().cuda()
+            # pb_utils.Logger.log_warn(f"shape input_ids_tensor: {trt_input_ids.shape}")
+            # pb_utils.Logger.log_warn(f"shape token_type_ids_tensor: {trt_token_type_ids.shape}")
+            # pb_utils.Logger.log_warn(f"shape input_lengths_tensor: {trt_input_lengths.shape}")
+
+            inputs = {
+                'input_ids': trt_input_ids,
+                'token_type_ids': trt_token_type_ids,
+                'input_lengths': trt_input_lengths
+            }
+            # pb_utils.Logger.log_warn(f"inputs: {inputs}")
+
+            output_info = self.session.infer_shapes([
+                    TensorInfo('input_ids', trt.DataType.INT32, inputs['input_ids'].shape),
+                    TensorInfo('token_type_ids', trt.DataType.INT32, inputs['token_type_ids'].shape),
+                    TensorInfo('input_lengths', trt.DataType.INT32, inputs['input_lengths'].squeeze(0).shape),
+                ])
+            # pb_utils.Logger.log_warn(f"output_info: {output_info}")
+            outputs = {
+                    t.name: torch.empty(tuple(t.shape), dtype=trt_dtype_to_torch(t.dtype), device='cuda')
+                    for t in output_info
+                }
+            session_state_code = self.session.run(inputs, outputs, self.stream.cuda_stream)
+            if not session_state_code:
+                raise RuntimeError("TRT-LLM Runtime execution failed")
+            torch.cuda.Stream.synchronize(self.stream)
+
+            # pb_utils.Logger.log_warn(f"[outputs] {outputs}")
+            scores = outputs["logits"].view(-1,).float()
+            # pb_utils.Logger.log_warn(f"[scores] 111 {scores}")
+            scores = torch.sigmoid(scores)
+            # pb_utils.Logger.log_warn(f"[scores] 222 {scores}")
+            scores_collection.extend(scores.cpu().numpy().tolist())
+
         if len(scores_collection) == 1:
             return scores_collection[0]
         return scores_collection
+    
+    # def compute_score(
+    #         self, 
+    #         sentence_pairs: Union[List[Tuple[str, str]], Tuple[str, str]], 
+    #         batch_size: int = 128,
+    #         max_length: int = 512,
+    #         enable_tqdm: bool=False,
+    #         **kwargs
+    #     ):
+    #     # if self.num_gpus > 1:
+    #     #     batch_size = batch_size * self.num_gpus
+        
+    #     assert isinstance(sentence_pairs, list)
+    #     if isinstance(sentence_pairs[0], str):
+    #         sentence_pairs = [sentence_pairs]
+
+    #     with torch.no_grad():
+    #         scores_collection = []
+    #         for sentence_id in tqdm(range(0, len(sentence_pairs), batch_size), desc='Calculate scores', disable=not enable_tqdm):
+    #             sentence_pairs_batch = sentence_pairs[sentence_id: sentence_id + batch_size]
+    #             inputs = self.tokenizer(
+    #                         sentence_pairs_batch, 
+    #                         padding=True,
+    #                         truncation=True,
+    #                         max_length=max_length,
+    #                         return_tensors="pt"
+    #                     )
+    #             inputs_on_device = {k: v.to(self.device) for k, v in inputs.items()} 
+    #             # token_type_ids = inputs.attention_mask.sum(dim=1).unsqueeze(0).int().cuda()
+    #             # token_type_ids = inputs.attention_mask.int().cuda()
+    #             # inputs_on_device["token_type_ids"] = token_type_ids
+    #             # logging.warning(f"[inputs_on_device] {inputs_on_device}")
+    #             scores = self.model(**inputs_on_device, return_dict=True).logits.view(-1,).float()
+    #             scores = torch.sigmoid(scores)
+    #             scores_collection.extend(scores.cpu().numpy().tolist())
+        
+    #     if len(scores_collection) == 1:
+    #         return scores_collection[0]
+    #     return scores_collection
     
     def _merge_inputs(self, chunk1_raw, chunk2):
         chunk1 = deepcopy(chunk1_raw)

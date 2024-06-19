@@ -103,8 +103,7 @@ def parse_arguments():
                             'BertForSequenceClassification',
                             'RobertaModel',
                             'RobertaForQuestionAnswering',
-                            'RobertaForSequenceClassification',
-                            'XLMRobertaModel'
+                            'RobertaForSequenceClassification'
                         ])
     parser.add_argument('--model_path', type=str, default='/data/yangsheng/risk-control-master/train/bert_classify_torch/trt-llm-fp16-0/')
     args = parser.parse_args()
@@ -221,7 +220,11 @@ def build(model_path, output_dir, model_name,
         # hf_bert = globals()[f'{model_type}ForSequenceClassification'](
         #     bert_config).cuda().to(torch_dtype).eval()
         # bert_folder="/mnt/publish-data/pretrain_models/taichu-risk-control-bert/model/"
-        hf_bert = BertForSequenceClassification.from_pretrained(model_path, trust_remote_code=True).cuda().to(torch_dtype).eval()
+        if model_name == 'BertForSequenceClassification':
+            hf_bert = BertForSequenceClassification.from_pretrained(model_path, trust_remote_code=True).cuda().to(torch_dtype).eval()
+        else:
+            hf_bert = RobertaForSequenceClassification.from_pretrained(model_path, trust_remote_code=True).cuda().to(torch_dtype).eval()
+        logger.warning(f"[hf_bert] {hf_bert}")
 
         tensorrt_llm_bert = tensorrt_llm.models.BertForSequenceClassification(
             num_layers=bert_config.num_hidden_layers,

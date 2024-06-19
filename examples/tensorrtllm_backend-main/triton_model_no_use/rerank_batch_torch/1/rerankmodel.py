@@ -68,9 +68,15 @@ class RerankerModel:
                 # token_type_ids = inputs.attention_mask.sum(dim=1).unsqueeze(0).int().cuda()
                 # token_type_ids = inputs.attention_mask.int().cuda()
                 # inputs_on_device["token_type_ids"] = token_type_ids
+
                 # logging.warning(f"[inputs_on_device] {inputs_on_device}")
-                scores = self.model(**inputs_on_device, return_dict=True).logits.view(-1,).float()
+                outputs = self.model(**inputs_on_device, return_dict=True)
+                # logging.warning(f"[outputs] {outputs}")
+
+                scores = outputs.logits.view(-1,).float()
+                # logging.warning(f"[scores] 111 {scores}")
                 scores = torch.sigmoid(scores)
+                # logging.warning(f"[scores] 222 {scores}")
                 scores_collection.extend(scores.cpu().numpy().tolist())
         
         if len(scores_collection) == 1:

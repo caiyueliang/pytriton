@@ -139,8 +139,7 @@ def load_from_hf_qa_model(tensorrt_llm_qa_model: tensorrt_llm.module.Module,
         torch_dtype).cpu().numpy()
 
 
-def load_from_hf_cls_model(tensorrt_llm_cls_model: tensorrt_llm.models.
-                           BertForSequenceClassification,
+def load_from_hf_cls_model(tensorrt_llm_cls_model: tensorrt_llm.models.BertForSequenceClassification,
                            hf_qa_model: Union[BertPreTrainedModel,
                                               RobertaPreTrainedModel],
                            hf_bert_config: Union[BertConfig, RobertaConfig],
