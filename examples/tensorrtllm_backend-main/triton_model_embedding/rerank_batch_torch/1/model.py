@@ -102,9 +102,9 @@ class TritonPythonModel:
         pb_utils.Logger.log_warn(f"[tokenizer_dir] {tokenizer_dir}")
         # self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir, trust_remote_code=True)
 
-        engine_dir = model_config['parameters']['engine_dir']['string_value']
-        model_path = engine_dir
-        pb_utils.Logger.log_warn(f"[model_path] {model_path}")
+        # engine_dir = model_config['parameters']['engine_dir']['string_value']
+        # model_path = engine_dir
+        # pb_utils.Logger.log_warn(f"[model_path] {model_path}")
         # self.stream = torch.cuda.Stream()
         # with open(model_path, 'rb') as f:
         #     engine_buffer = f.read()
@@ -112,8 +112,7 @@ class TritonPythonModel:
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         use_fp16=True
-        self.reranker = RerankerModel(model_name_or_path=tokenizer_dir, use_fp16=use_fp16, device=device,
-                                      trt_model_name_or_path=engine_dir) 
+        self.reranker = RerankerModel(model_name_or_path=tokenizer_dir, use_fp16=use_fp16, device=device) 
 
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`

@@ -9,9 +9,6 @@ from copy import deepcopy
 
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-from tensorrt_llm.runtime import ModelRunner, SamplingConfig
-from tensorrt_llm.runtime import Session, TensorInfo
-
 
 
 class RerankerModel:
@@ -20,33 +17,25 @@ class RerankerModel:
             model_name_or_path: str='maidalun1020/yd-reranker-base_v1',
             use_fp16: bool=False,
             device: str=None,
-            trt_model_name_or_path: str=None,
             **kwargs
         ):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_name_or_path, **kwargs)
+        self.device = device
 
-        # self.model = AutoModelForSequenceClassification.from_pretrained(model_name_or_path, **kwargs)
-        # self.device = device
+        # self.num_gpus = 1
+        if use_fp16:
+            self.model.half()
 
-        # # self.num_gpus = 1
-        # if use_fp16:
-        #     self.model.half()
-
-        # self.model.eval()
-        # self.model = self.model.to(self.device)
+        self.model.eval()
+        self.model = self.model.to(self.device)
 
         # for advanced preproc of tokenization
         self.sep_id = self.tokenizer.sep_token_id
         self.max_length = kwargs.get('max_length', 512)
         self.overlap_tokens = kwargs.get('overlap_tokens', 80)
 
-        if trt_model_name_or_path:
-            self.stream = torch.cuda.Stream()
-            with open(trt_model_name_or_path, 'rb') as f:
-                engine_buffer = f.read()
-            self.session = Session.from_serialized_engine(engine_buffer)
-
-        # logging.info(f"Execute device: {self.device};\t use fp16: {use_fp16}")
+        logging.info(f"Execute device: {self.device};\t use fp16: {use_fp16}")
 
     
     def compute_score(
