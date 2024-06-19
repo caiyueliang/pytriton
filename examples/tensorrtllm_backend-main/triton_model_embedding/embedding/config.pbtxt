@@ -52,6 +52,5 @@ parameters {
     key: "engine_dir"
     value: {
         string_value: "/mnt/publish-data/train_data/embedding/bce-embedding-base_v1_triton_trt/RobertaModel_float16_tp1_rank0.engine"
-        # string_value: "/mnt/publish-data/train_data/embedding/bce-embedding-base_v1_triton_trt_opt1_max512/RobertaModel_float16_tp1_rank0.engine"
     }
 }
