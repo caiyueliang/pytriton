@@ -12,6 +12,9 @@ from tensorrt_llm.runtime import ModelRunner, SamplingConfig
 from tensorrt_llm.runtime import Session, TensorInfo
 
 
+MAX_LENGTH = 512
+
+
 def mpi_comm():
     from mpi4py import MPI
     return MPI.COMM_WORLD
@@ -137,6 +140,7 @@ class TritonPythonModel:
         responses = []
         text_batch = []
         group_list = []
+        max_length_list = []
         # Every Python backend must iterate through list of requests and create
         # an instance of pb_utils.InferenceResponse class for each of them. You
         # should avoid storing any of the input Tensors in the class attributes
@@ -146,9 +150,13 @@ class TritonPythonModel:
 
         # pb_utils.Logger.log_warn(f"requests len: {len(requests)}")
         for idx, request in enumerate(requests):
-            max_length = pb_utils.get_input_tensor_by_name(request, 'max_length').as_numpy()
-            max_length = max_length[0][0]
-            # pb_utils.Logger.log_warn(f"[execute] text: {text}; max_length: {max_length}")
+            max_length = pb_utils.get_input_tensor_by_name(request, 'max_length')
+            if max_length is None:
+                max_length = MAX_LENGTH
+            else:
+                max_length = max_length.as_numpy()[0][0]
+            max_length = max_length if max_length < MAX_LENGTH else MAX_LENGTH
+            max_length_list.append(max_length)
 
             # Get input tensors
             text_per_req = pb_utils.get_input_tensor_by_name(request, 'text').as_numpy()
@@ -161,6 +169,7 @@ class TritonPythonModel:
                 # pb_utils.Logger.log_warn(f"text: {text}")
                 text_batch.append(text)
 
+        max_length = max(max_length_list)
         pb_utils.Logger.log_warn(f"group_list: {group_list}; text len: {len(text_batch)}; max_length: {max_length}; text_batch: {text_batch[:8]}; ")
 
         # pb_utils.Logger.log_warn(f"text_batch len: {len(requests)}")

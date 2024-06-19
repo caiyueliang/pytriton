@@ -12,6 +12,7 @@ input [
         name: "max_length"
         data_type: TYPE_INT32
         dims: [1]
+        optional: true
     }
 ]
 
@@ -29,7 +30,7 @@ output [
 ]
 
 dynamic_batching {
-    preferred_batch_size: [ 1, 8, 16 ],
+    preferred_batch_size: [ 8, 16 ],
     max_queue_delay_microseconds: 1000   # 等待时间
 }
 
