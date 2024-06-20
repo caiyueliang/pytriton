@@ -138,7 +138,7 @@ class TritonPythonModel:
         candidate_list = []
 
         for request in requests:
-            query = pb_utils.get_input_tensor_by_name(request, 'query').as_numpy()[0, 0].decode("utf-8")
+            query = pb_utils.get_input_tensor_by_name(request, 'query').as_numpy()[0].decode("utf-8")
             candidate = pb_utils.get_input_tensor_by_name(request, 'candidate').as_numpy()
 
             group_list.append(len(candidate[0]))
@@ -147,7 +147,7 @@ class TritonPythonModel:
                 pairs.append([query, candi])
                 candidate_list.append(candi)
 
-        pb_utils.Logger.log_warn(f"group_list: {group_list}; text len: {len(pairs)}; pairs: {pairs[:4]}")
+        pb_utils.Logger.log_warn(f"group_list: {group_list}; text len: {len(pairs)}; pairs: {pairs}")
 
         result = self.reranker.compute_score(sentence_pairs=pairs)
         if isinstance(result, float):
