@@ -147,7 +147,7 @@ class TritonPythonModel:
                 pairs.append([query, candi])
                 candidate_list.append(candi)
 
-        pb_utils.Logger.log_warn(f"group_list: {group_list}; text len: {len(pairs)}; pairs: {pairs}")
+        pb_utils.Logger.log_warn(f"group: {group_list}; text len: {len(pairs)}; pairs: {pairs}")
 
         result = self.reranker.compute_score(sentence_pairs=pairs)
         if isinstance(result, float):
