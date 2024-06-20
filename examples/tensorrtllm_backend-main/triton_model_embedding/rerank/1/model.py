@@ -149,6 +149,17 @@ class TritonPythonModel:
 
         pb_utils.Logger.log_warn(f"group: {group_list}; text len: {len(pairs)}; pairs: {pairs}")
 
+        if len(pairs) == 0:
+            for g in group_list:
+                score_bytes = np.array([pickle.dumps({})])
+                inference_response = pb_utils.InferenceResponse(
+                    output_tensors = [
+                        pb_utils.Tensor("score", score_bytes)
+                    ]
+                )
+                responses.append(inference_response)
+            return responses
+
         result = self.reranker.compute_score(sentence_pairs=pairs)
         if isinstance(result, float):
             result = [result]

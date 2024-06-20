@@ -64,6 +64,7 @@ class RerankerModel:
                             return_tensors="pt"
                         )
                 inputs_on_device = {k: v.to(self.device) for k, v in inputs.items()}
+                
                 scores = self.model(**inputs_on_device, return_dict=True).logits.view(-1,).float()
                 scores = torch.sigmoid(scores)
                 scores_collection.extend(scores.cpu().numpy().tolist())

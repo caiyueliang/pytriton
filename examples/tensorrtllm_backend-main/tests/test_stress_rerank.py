@@ -13,6 +13,7 @@ import requests
 import json
 import pickle
 import time
+import random
 import multiprocessing
 import numpy as np
 from loguru import logger
@@ -32,6 +33,8 @@ from utils import utils
 # HEADER = {'Content-Type': 'application/json; charset=utf-8'}
 model_name = ""
 print_log = False
+random_input = True
+
 
 def print_response(result_dict, compress=True):
     if compress is True:
@@ -49,7 +52,11 @@ def infer(url, init_timeout_s, query, candidate, times):
     with ModelClient(url, model_name, init_timeout_s=init_timeout_s) as client:
         for i in range(times):
             start = time.time() * 1000
-            result_dict = client.infer_sample(query, candidate)
+            if random_input is True:
+                candidate_tmp = candidate[: random.randint(1, len(candidate))]
+            else:
+                candidate_tmp = candidate
+            result_dict = client.infer_sample(query, candidate_tmp)
             if print_log is True:
                 print_response(result_dict=result_dict)
 
@@ -146,6 +153,7 @@ def parse_argvs():
     parser.add_argument("--pooler", help="pooler", type=str, default="cls")
     parser.add_argument("--print_log", type=bool, default=False, required=False)
     parser.add_argument("--batch_size", type=int, default=10, required=False)
+    parser.add_argument("--random_input", type=bool, default=True, required=False)
     args = parser.parse_args()
 
     args = parser.parse_args()
@@ -159,11 +167,12 @@ if __name__ == '__main__':
 
     model_name = args.model_name
     print_log = args.print_log
+    random_input = args.random_input
 
     query = np.array([args.query.encode('utf-8')])
 
-    candidate = args.candidate[:args.batch_size]
-    candidate = np.array([candi.encode('utf-8') for candi in candidate])
+    # candidate = args.candidate[:args.batch_size]
+    candidate = np.array([candi.encode('utf-8') for candi in args.candidate])
 
     # logger.info(f"query: {query}")
     # logger.info(f"candidate: {candidate}")
