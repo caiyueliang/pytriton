@@ -13,6 +13,7 @@ from tensorrt_llm.runtime import Session, TensorInfo
 
 
 MAX_LENGTH = 512
+MAX_BATCH_SIZE = 128
 
 
 def mpi_comm():
@@ -120,6 +121,57 @@ class TritonPythonModel:
         #     while (True):
         #         self.execute([None])
 
+    def _embedding(self, trt_input_ids, trt_token_type_ids, trt_input_lengths):
+        embeddings = None
+        
+        for text_id in range(0, trt_input_ids.shape[0], MAX_BATCH_SIZE):
+            sub_trt_input_ids = trt_input_ids[text_id: text_id + MAX_BATCH_SIZE]
+            sub_trt_token_type_ids = trt_token_type_ids[text_id: text_id + MAX_BATCH_SIZE]
+            sub_trt_input_lengths = trt_input_lengths[:, text_id: text_id + MAX_BATCH_SIZE]
+
+            # pb_utils.Logger.log_warn(f"shape sub_trt_input_ids: {sub_trt_input_ids.shape}")
+            # pb_utils.Logger.log_warn(f"shape sub_trt_token_type_ids: {sub_trt_token_type_ids.shape}")
+            # pb_utils.Logger.log_warn(f"shape sub_trt_input_lengths: {sub_trt_input_lengths.shape}")
+
+            inputs = {
+                'input_ids': sub_trt_input_ids,
+                'token_type_ids': sub_trt_token_type_ids,
+                'input_lengths': sub_trt_input_lengths
+            }
+            output_info = self.session.infer_shapes([
+                    TensorInfo('input_ids', trt.DataType.INT32, inputs['input_ids'].shape),
+                    TensorInfo('input_lengths', trt.DataType.INT32, inputs['input_lengths'].squeeze(0).shape),
+                    TensorInfo('token_type_ids', trt.DataType.INT32, inputs['token_type_ids'].shape),
+                ])
+            outputs = {
+                    t.name: torch.empty(tuple(t.shape), dtype=trt_dtype_to_torch(t.dtype), device='cuda')
+                    for t in output_info
+                }
+            session_state_code = self.session.run(inputs, outputs, self.stream.cuda_stream)
+            if not session_state_code:
+                raise RuntimeError("TRT-LLM Runtime execution failed")
+            torch.cuda.Stream.synchronize(self.stream)
+
+            # if pooler == "cls":
+            #     embeddings = outputs["hidden_states"][:, 0]
+            # elif pooler == "mean":
+            #     attention_mask = inputs['attention_mask'].to(device)
+            #     last_hidden = outputs["hidden_states"]
+            #     embeddings = (last_hidden * attention_mask.unsqueeze(-1).float()).sum(1) / attention_mask.sum(-1).unsqueeze(-1)
+            # else:
+            #     raise NotImplementedError
+            sub_embeddings = outputs["hidden_states"][:, 0]
+            sub_embeddings = sub_embeddings / sub_embeddings.norm(dim=1, keepdim=True)
+
+            sub_embeddings = sub_embeddings.cpu().detach().numpy()
+
+            if embeddings is None:
+                embeddings = sub_embeddings
+            else:
+                embeddings = np.concatenate((embeddings, sub_embeddings), axis=0)
+
+        return embeddings
+    
     def execute(self, requests):
         """`execute` must be implemented in every Python model. `execute`
         function receives a list of pb_utils.InferenceRequest as the only
@@ -189,39 +241,10 @@ class TritonPythonModel:
         usage_list = generage_usage(input_lengths=trt_input_lengths[0], group_sizes=group_list)
         # pb_utils.Logger.log_warn(f"[usage_list] {usage_list}")
 
-        inputs = {
-            'input_ids': trt_input_ids,
-            'token_type_ids': trt_token_type_ids,
-            'input_lengths': trt_input_lengths
-        }
-
-        output_info = self.session.infer_shapes([
-                TensorInfo('input_ids', trt.DataType.INT32, inputs['input_ids'].shape),
-                TensorInfo('input_lengths', trt.DataType.INT32, inputs['input_lengths'].squeeze(0).shape),
-                TensorInfo('token_type_ids', trt.DataType.INT32, inputs['token_type_ids'].shape),
-            ])
-        outputs = {
-                t.name: torch.empty(tuple(t.shape), dtype=trt_dtype_to_torch(t.dtype), device='cuda')
-                for t in output_info
-            }
-        session_state_code = self.session.run(inputs, outputs, self.stream.cuda_stream)
-        if not session_state_code:
-            raise RuntimeError("TRT-LLM Runtime execution failed")
-        torch.cuda.Stream.synchronize(self.stream)
-
-        # if pooler == "cls":
-        #     embeddings = outputs["hidden_states"][:, 0]
-        # elif pooler == "mean":
-        #     attention_mask = inputs['attention_mask'].to(device)
-        #     last_hidden = outputs["hidden_states"]
-        #     embeddings = (last_hidden * attention_mask.unsqueeze(-1).float()).sum(1) / attention_mask.sum(-1).unsqueeze(-1)
-        # else:
-        #     raise NotImplementedError
-        embeddings = outputs["hidden_states"][:, 0]
-        embeddings = embeddings / embeddings.norm(dim=1, keepdim=True)
-
-        embeddings = embeddings.cpu().detach().numpy()
-        # pb_utils.Logger.log_warn(f"embeddings: {type(embeddings)}, {embeddings}")
+        embeddings = self._embedding(trt_input_ids=trt_input_ids, 
+                                     trt_token_type_ids=trt_token_type_ids, 
+                                     trt_input_lengths=trt_input_lengths)
+        # pb_utils.Logger.log_warn(f"embeddings: {type(embeddings)}, {embeddings.shape}, {embeddings}")
 
         embeddings_g = tensor_group(tensor=embeddings, group_sizes=group_list)
         for embedding, usage in zip(embeddings_g, usage_list):
