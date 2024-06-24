@@ -147,7 +147,7 @@ class TritonPythonModel:
                 pairs.append([query, candi])
                 candidate_list.append(candi)
 
-        pb_utils.Logger.log_warn(f"group: {group_list}; text len: {len(pairs)}; pairs: {pairs}")
+        pb_utils.Logger.log_warn(f"[rerank] group: {group_list}; text len: {len(pairs)}; pairs: {pairs}")
 
         if len(pairs) == 0:
             for g in group_list:

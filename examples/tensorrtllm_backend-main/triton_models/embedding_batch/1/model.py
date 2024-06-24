@@ -170,7 +170,7 @@ class TritonPythonModel:
                 text_batch.append(text)
 
         max_length = max(max_length_list)
-        pb_utils.Logger.log_warn(f"group: {group_list}; text len: {len(text_batch)}; max_length: {max_length}; text_batch: {text_batch}; ")
+        pb_utils.Logger.log_warn(f"[embedding_batch] group: {group_list}; text len: {len(text_batch)}; max_length: {max_length}; text_batch: {text_batch}; ")
 
         # pb_utils.Logger.log_warn(f"text_batch len: {len(requests)}")
 
