@@ -1,5 +1,6 @@
 import logging
 import torch
+import gc
 
 import numpy as np
 
@@ -29,6 +30,7 @@ class RerankerModel:
 
         self.model.eval()
         self.model = self.model.to(self.device)
+        self.model = torch.compile(self.model, dynamic=True)
 
         # for advanced preproc of tokenization
         self.sep_id = self.tokenizer.sep_token_id
@@ -36,8 +38,13 @@ class RerankerModel:
         self.overlap_tokens = kwargs.get('overlap_tokens', 80)
 
         logging.info(f"Execute device: {self.device};\t use fp16: {use_fp16}")
-
     
+    def __del__(self):
+        del self.model
+        del self.tokenizer
+        gc.collect()
+        torch.cuda.empty_cache()
+        
     def compute_score(
             self, 
             sentence_pairs: Union[List[Tuple[str, str]], Tuple[str, str]], 

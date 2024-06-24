@@ -153,7 +153,7 @@ def parse_argvs():
     parser.add_argument("--pooler", help="pooler", type=str, default="cls")
     parser.add_argument("--print_log", type=bool, default=False, required=False)
     parser.add_argument("--batch_size", type=int, default=10, required=False)
-    parser.add_argument("--random_input", type=bool, default=True, required=False)
+    parser.add_argument("--random_input", type=bool, default=False, required=False)
     args = parser.parse_args()
 
     args = parser.parse_args()
