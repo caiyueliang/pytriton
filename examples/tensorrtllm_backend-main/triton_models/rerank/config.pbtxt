@@ -40,12 +40,12 @@ instance_group [
 parameters {
   key: "tokenizer_dir"
   value: {
-    string_value: "/mnt/publish-data/train_data/rerank/bce-reranker-base_v1/"
+    string_value: "/mnt/publish-data/train_data/reranker/bce-reranker-base_v1/"
   }
 }
 parameters {
     key: "engine_dir"
     value: {
-        string_value: "/mnt/publish-data/train_data/rerank/bce-reranker-base_v1_triton_trt/RobertaForSequenceClassification_float16_tp1_rank0.engine"
+        string_value: "/mnt/publish-data/train_data/reranker/bce-reranker-base_v1_triton_trt/RobertaForSequenceClassification_float16_tp1_rank0.engine"
     }
 }
