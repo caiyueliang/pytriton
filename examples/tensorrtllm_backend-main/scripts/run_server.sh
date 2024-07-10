@@ -14,8 +14,8 @@ MODEL_PATH_EMBEDDING_TRT=${MODEL_PATH_EMBEDDING_TRT:="/mnt/publish-data/train_da
 MODEL_NAME_EMBEDDING_TRT=${MODEL_NAME_EMBEDDING_TRT:="RobertaModel_float16_tp1_rank0.engine"}
 TRT_FILE_EMBEDDING=${MODEL_PATH_EMBEDDING_TRT}${MODEL_NAME_EMBEDDING_TRT}
 
-MODEL_PATH_RERANK=${MODEL_PATH_RERANK:="/mnt/publish-data/train_data/rerank/bce-reranker-base_v1/"}
-MODEL_PATH_RERANK_TRT=${MODEL_PATH_RERANK_TRT:="/mnt/publish-data/train_data/rerank/bce-reranker-base_v1_triton_trt/"}
+MODEL_PATH_RERANK=${MODEL_PATH_RERANK:="/mnt/publish-data/train_data/reranker/bce-reranker-base_v1/"}
+MODEL_PATH_RERANK_TRT=${MODEL_PATH_RERANK_TRT:="/mnt/publish-data/train_data/reranker/bce-reranker-base_v1_triton_trt/"}
 MODEL_NAME_RERANK_TRT=${MODEL_NAME_RERANK_TRT:="RobertaForSequenceClassification_float16_tp1_rank0.engine"}
 TRT_FILE_RERANK=${MODEL_PATH_RERANK_TRT}${MODEL_NAME_RERANK_TRT}
 
